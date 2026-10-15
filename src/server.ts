@@ -2,7 +2,9 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import atlassianRouter from './adapters/atlassian/routes';
-import { validateEnv } from './config/gateway.config';
+import genericRouter, { authenticateGeneric, handleDirectMcpRequest } from './adapters/generic/routes';
+import { handleSseConnection, handlePostMessages } from './adapters/generic/sse';
+import { validateEnv, gatewayConfig } from './config/gateway.config';
 import { driverManager } from './core/mcp/driverManager';
 
 // Load environment variables
@@ -74,8 +76,18 @@ app.use('/.well-known/oauth-protected-resource', (req, res) => {
   });
 });
 
-// Mount Atlassian Adapter Routes
+// Mount Inbound Adapters
 app.use('/atlassian', atlassianRouter);
+app.use('/generic', genericRouter);
+
+// Root shortcut endpoints for Cursor / Claude Code
+app.get('/sse', authenticateGeneric, (req, res) => {
+  const allowedDrivers = gatewayConfig?.inboundAdapters?.generic?.allowedDrivers;
+  const userEmail = (req.headers['x-user-email'] as string) || 'generic-agent@gateway.local';
+  handleSseConnection(req, res, allowedDrivers, userEmail);
+});
+app.post('/messages', handlePostMessages);
+app.post('/mcp', authenticateGeneric, handleDirectMcpRequest);
 
 // Simple Health Check
 app.get('/', (req, res) => {

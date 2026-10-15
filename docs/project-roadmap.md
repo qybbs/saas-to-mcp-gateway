@@ -60,9 +60,14 @@ Menambahkan pintu masuk bagi platform AI non-Atlassian serta menyediakan antarmu
 *   **Penyusunan Kontrak Konfigurasi Terpusat (`gateway-mcp-config.json`)**:
     *   Membangun file konfigurasi JSON untuk mendaftarkan banyak (*multi-instance*) inbound adapter dan outbound driver sekaligus secara terstruktur, menggantikan batasan flat `.env`.
     *   Mendukung *environment variable substitution* (seperti `${SONARQUBE_TOKEN}`) agar rahasia/token tetap tersimpan aman di `.env` dan tidak *hardcoded* di file JSON.
-*   **Inbound-to-Outbound Scoping (Access Control)**:
-    *   Menyediakan pemetaan hak akses (`allowedDrivers`) di konfigurasi setiap inbound adapter, sehingga adapter tertentu hanya diizinkan memanggil driver tertentu (misal: Atlassian hanya mengakses BigQuery, sedangkan OpenAI dapat mengakses BigQuery & SonarQube).
-    *   Memodifikasi `DriverManager` dan `Router` agar memfilter daftar *tools* secara dinamis berdasarkan izin akses pemanggil (*client context*).
+*   **Inbound-to-Outbound Scoping (Access Control) [SELESAI]**:
+    *   Menyediakan pemetaan hak akses (`allowedDrivers`) di konfigurasi setiap inbound adapter, sehingga adapter tertentu hanya diizinkan memanggil driver tertentu (misal: Atlassian hanya mengakses BigQuery, sedangkan generic adapter dapat mengakses BigQuery & SonarQube).
+    *   Memodifikasi `DriverManager`, `Router`, dan inbound handler agar memfilter daftar *tools* secara dinamis dan menolak (`403 Forbidden` / `-32000 Access Denied`) pemanggilan tool di luar driver yang diizinkan.
+*   **Generic Inbound Adapter (Cursor, Claude Code, Standard MCP Clients) [SELESAI]**:
+    *   *SSE Transport*: Mengimplementasikan SSE stream transport resmi (`GET /generic/sse` dan root `/sse`, serta `POST /generic/messages` dan root `/messages`).
+    *   *Direct Streamable HTTP / JSON-RPC*: Menyediakan direct POST (`POST /generic/mcp` dan root `/mcp`) untuk pengujian cepat stateless / curl.
+    *   *Otentikasi*: Mendukung validasi opsional API Key (`Authorization: Bearer <key>` atau `X-API-Key: <key>`).
+    *   *Packaging*: Menyediakan `SKILL.md` standar yang mendefinisikan guardrails, urutan pemanggilan tool (Discovery -> Schema -> Cost Estimation -> Execution), dan panduan setup Cursor & Claude Code.
 *   **OpenAI Action Adapter**:
     *   *Translasi Protokol*: Membuat parser yang secara otomatis menerjemahkan tool schema MCP menjadi dokumentasi **OpenAPI (Swagger) JSON**.
     *   *Otentikasi*: Menyediakan endpoint otentikasi standar (OAuth 2.0 atau Static API Key) yang bisa dibaca oleh OpenAI.

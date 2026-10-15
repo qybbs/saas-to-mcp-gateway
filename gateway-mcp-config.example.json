@@ -22,8 +22,13 @@
       "enabled": true,
       "allowedDrivers": ["bigquery"]
     },
-    "openai-actions": {
+    "generic": {
       "enabled": true,
+      "allowedDrivers": ["bigquery", "sonarqube", "internal-tool"],
+      "apiKey": "${GENERIC_ADAPTER_API_KEY}"
+    },
+    "openai-actions": {
+      "enabled": false,
       "allowedDrivers": ["bigquery", "sonarqube", "internal-tool"]
     }
   }

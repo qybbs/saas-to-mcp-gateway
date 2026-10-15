@@ -2,6 +2,7 @@ import express from 'express';
 import { verifyJwt } from '../../core/auth/helpers';
 import { routeMcpRequest } from '../../core/mcp/router';
 import { sanitizeLogString } from '../../core/logging/audit';
+import { gatewayConfig } from '../../config/gateway.config';
 
 export const handleMcpRequest = async (req: express.Request, res: express.Response) => {
   const authHeader = req.headers.authorization;
@@ -23,16 +24,36 @@ export const handleMcpRequest = async (req: express.Request, res: express.Respon
     return res.status(401).json({ jsonrpc: '2.0', error: { code: -32001, message: `Unauthorized: Token validation failed (${sanitizeLogString(e.message)})` } });
   }
 
-  const pathDriverName = req.params.driverName;
-  
+  const pathDriverName = typeof req.params.driverName === 'string' ? req.params.driverName : undefined;
+  const adapterConfig = gatewayConfig?.inboundAdapters?.atlassian;
+  const adapterAllowedDrivers = adapterConfig?.allowedDrivers;
+
+  // Check if requested path driver is allowed for this adapter
+  if (pathDriverName && adapterAllowedDrivers && !adapterAllowedDrivers.includes(pathDriverName)) {
+    return res.status(403).json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: `Forbidden: Driver "${pathDriverName}" is not allowed for this adapter` }
+    });
+  }
+
+  // Check if token driver is allowed for this adapter
+  if (tokenDriverName && adapterAllowedDrivers && !adapterAllowedDrivers.includes(tokenDriverName)) {
+    return res.status(403).json({
+      jsonrpc: '2.0',
+      error: { code: -32000, message: `Forbidden: Token driver scope "${tokenDriverName}" is not allowed for this adapter` }
+    });
+  }
+
   // If the path asks for a specific driver, the token must be scoped to that driver or have no scope.
-  // Actually, if the token is scoped to a different driver, deny access.
   if (pathDriverName && tokenDriverName && pathDriverName !== tokenDriverName) {
     return res.status(403).json({ jsonrpc: '2.0', error: { code: -32000, message: 'Forbidden: Token driver scope does not match requested path driver' } });
   }
 
   // Allow list for scoping outbound calls
-  const allowedDrivers = pathDriverName ? [pathDriverName as string] : (tokenDriverName ? [tokenDriverName as string] : undefined);
+  const allowedDrivers = pathDriverName
+    ? [pathDriverName as string]
+    : (tokenDriverName ? [tokenDriverName as string] : adapterAllowedDrivers);
+
 
   const { jsonrpc, id, method, params } = req.body;
 
@@ -50,7 +71,8 @@ export const handleMcpRequest = async (req: express.Request, res: express.Respon
 
   let statusCode = 200;
   if (mcpResponse.error) {
-    if (mcpResponse.error.code === -32600) statusCode = 400; // Invalid Request
+    if (mcpResponse.error.code === -32000) statusCode = 403; // Access Denied / Forbidden
+    else if (mcpResponse.error.code === -32600) statusCode = 400; // Invalid Request
     else if (mcpResponse.error.code === -32601) statusCode = 404; // Method not found
     else if (mcpResponse.error.code === -32602) statusCode = 400; // Invalid params
     else if (mcpResponse.error.code === -32603) statusCode = 500; // Internal error

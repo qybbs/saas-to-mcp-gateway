@@ -9,6 +9,7 @@ export interface OutboundDriverConfig {
 export interface InboundAdapterConfig {
   enabled: boolean;
   allowedDrivers: string[];
+  apiKey?: string;
 }
 
 export interface GatewayConfig {

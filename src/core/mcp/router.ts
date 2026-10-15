@@ -65,22 +65,35 @@ const handleToolsCall = async (id: any, userEmail: string, params: any, allowedD
     };
   }
 
-  if (allowedDrivers) {
-    const driverName = driverManager.getDriverNameForTool(toolName);
-    if (!driverName || !allowedDrivers.includes(driverName)) {
-      writeAuditLog({
-        requestId: id,
-        userEmail,
-        toolName,
-        status: 'REJECTED',
-        denialReason: `Access Denied: You do not have permission to use tools from driver ${driverName || 'unknown'}. Allowed drivers: ${allowedDrivers.join(', ')}`,
-      });
-      return {
-        jsonrpc: '2.0',
-        id,
-        error: { code: -32000, message: `Access Denied: You do not have permission to use tools from driver ${driverName || 'unknown'}.` },
-      };
-    }
+  const driverName = driverManager.getDriverNameForTool(toolName);
+  if (!driverName) {
+    writeAuditLog({
+      requestId: id,
+      userEmail,
+      toolName,
+      status: 'FAILED',
+      error: `Method not found: Tool "${toolName}" is not registered by any active driver.`,
+    });
+    return {
+      jsonrpc: '2.0',
+      id,
+      error: { code: -32601, message: `Method not found: Tool "${toolName}" is not registered by any active driver.` },
+    };
+  }
+
+  if (allowedDrivers && !allowedDrivers.includes(driverName)) {
+    writeAuditLog({
+      requestId: id,
+      userEmail,
+      toolName,
+      status: 'REJECTED',
+      denialReason: `Access Denied: You do not have permission to use tools from driver ${driverName}. Allowed drivers: ${allowedDrivers.join(', ')}`,
+    });
+    return {
+      jsonrpc: '2.0',
+      id,
+      error: { code: -32000, message: `Access Denied: You do not have permission to use tools from driver ${driverName}.` },
+    };
   }
 
   try {
