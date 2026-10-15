@@ -41,7 +41,14 @@ export const handleSseConnection = async (
 
   transport.onmessage = async (message) => {
     try {
-      const response = await routeMcpRequest(message as any, userEmail, allowedDrivers);
+      const context = {
+        userEmail,
+        adapterName: 'generic',
+        requestId: (message as any)?.id || 'unknown',
+        timestamp: new Date().toISOString(),
+        clientIp: req.ip,
+      };
+      const response = await routeMcpRequest(message as any, context, allowedDrivers);
       if (response !== null) {
         await transport.send(response as any);
       }

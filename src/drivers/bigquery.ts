@@ -1,5 +1,6 @@
 import { BigQuery } from '@google-cloud/bigquery';
 import dotenv from 'dotenv';
+import { ToolContext } from '../core/mcp/context';
 
 dotenv.config();
 
@@ -160,12 +161,29 @@ export const estimateQueryCost = async (sql: string) => {
 };
 
 // 4. Execute Readonly Query (with Hard Caps & Security Validation)
-export const executeReadonlyQuery = async (sql: string) => {
+export const executeReadonlyQuery = async (sql: string, context?: ToolContext) => {
   const maxBytesBilled = process.env.MAX_BYTES_BILLED || '10737418240'; // Default 10 GB
+
+  // Build GCP job labels (lowercase alphanumeric, underscores, hyphens, max 63 chars)
+  const rawEmail = context?.userEmail || process.env.LOCAL_USER_EMAIL || 'developer_local';
+  const sanitizedEmail = rawEmail
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '_')
+    .slice(0, 63);
+
+  const rawAdapter = context?.adapterName || 'generic';
+  const sanitizedAdapter = rawAdapter
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]/g, '_')
+    .slice(0, 63);
 
   const [job] = await bigquery.createQueryJob({
     query: sql,
     maximumBytesBilled: maxBytesBilled,
+    labels: {
+      user_email: sanitizedEmail,
+      mcp_adapter: sanitizedAdapter,
+    },
   });
 
   console.log(`[BigQuery] Executing job: ${job.id} with maxBytesBilled limit: ${maxBytesBilled}`);
@@ -175,6 +193,21 @@ export const executeReadonlyQuery = async (sql: string) => {
   // Enforce Row capping at the client-side retrieval level
   const [rows] = await job.getQueryResults({
     maxResults: rowLimit,
+  });
+
+  const stats = job.metadata?.statistics?.query;
+  const actualBytes = stats?.totalBytesBilled
+    ? Number.parseInt(stats.totalBytesBilled, 10)
+    : (stats?.totalBytesProcessed ? Number.parseInt(stats.totalBytesProcessed, 10) : 0);
+
+  // Attach metadata to rows array for audit & budget consumption
+  Object.defineProperty(rows, '_queryMeta', {
+    value: {
+      jobId: job.id,
+      actualBytesBilled: actualBytes,
+    },
+    enumerable: false,
+    configurable: true,
   });
 
   return rows;

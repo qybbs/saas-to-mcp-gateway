@@ -1,4 +1,5 @@
 import { McpDriver, McpDriverType } from './driver';
+import { ToolContext } from './context';
 import { BigQueryDriver } from '../../drivers/bigqueryDriver';
 import { StdioDriver } from '../../drivers/stdioDriver';
 import { SseDriver } from '../../drivers/sseDriver';
@@ -110,7 +111,7 @@ export class DriverManager {
     return this.toolRegistry.get(namespacedName);
   }
 
-  async callTool(namespacedName: string, args: any): Promise<any> {
+  async callTool(namespacedName: string, args: any, context?: ToolContext): Promise<any> {
     const driverName = this.toolRegistry.get(namespacedName);
     
     if (!driverName) {
@@ -128,6 +129,9 @@ export class DriverManager {
       originalName = namespacedName.substring(driver.prefix.length);
     }
 
+    if (context !== undefined) {
+      return await driver.callTool(originalName, args, context);
+    }
     return await driver.callTool(originalName, args);
   }
 

@@ -109,6 +109,15 @@ const validatePositiveInteger = (value: string | undefined, varName: string, err
   }
 };
 
+const validateNonNegativeInteger = (value: string | undefined, varName: string, errors: string[]) => {
+  if (value !== undefined && value !== '') {
+    const num = Number(value);
+    if (!Number.isInteger(num) || num < 0) {
+      errors.push(`${varName} must be a non-negative integer (>= 0). Got: "${value}"`);
+    }
+  }
+};
+
 const validateDcrPersistenceMode = (errors: string[]) => {
   const mode = process.env.DCR_PERSISTENCE_MODE;
   const validModes = Object.values(DcrPersistenceMode) as string[];
@@ -168,6 +177,9 @@ export const validateEnv = (): void => {
   validatePositiveInteger(process.env.MAX_BYTES_BILLED, 'MAX_BYTES_BILLED', errors);
   validatePositiveInteger(process.env.ROW_LIMIT, 'ROW_LIMIT', errors);
   validatePositiveInteger(process.env.TOKEN_EXPIRATION_SECONDS, 'TOKEN_EXPIRATION_SECONDS', errors);
+  validateNonNegativeInteger(process.env.RATE_LIMIT_MAX_REQUESTS, 'RATE_LIMIT_MAX_REQUESTS', errors);
+  validatePositiveInteger(process.env.RATE_LIMIT_WINDOW_MS, 'RATE_LIMIT_WINDOW_MS', errors);
+  validateNonNegativeInteger(process.env.USER_DAILY_BUDGET_BYTES, 'USER_DAILY_BUDGET_BYTES', errors);
 
   if (errors.length > 0) {
     throw new Error('Environment validation failed:\n' + errors.map(e => ` - ${e}`).join('\n'));

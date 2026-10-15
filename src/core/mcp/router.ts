@@ -1,6 +1,9 @@
 import { writeAuditLog } from '../logging/audit';
 import { PolicyError } from './policy';
 import { driverManager } from './driverManager';
+import { ToolContext } from './context';
+import { rateLimiter } from '../security/rateLimiter';
+import { budgetManager } from '../security/budgetManager';
 
 export interface McpRequest {
   jsonrpc: string;
@@ -53,9 +56,15 @@ const handleToolsList = async (id: any, allowedDrivers?: string[]): Promise<McpR
   };
 };
 
-const handleToolsCall = async (id: any, userEmail: string, params: any, allowedDrivers?: string[]): Promise<McpResponse> => {
+const handleToolsCall = async (
+  id: any,
+  context: ToolContext,
+  params: any,
+  allowedDrivers?: string[]
+): Promise<McpResponse> => {
   const toolName = params?.name;
   const args = params?.arguments || {};
+  const { userEmail, adapterName } = context;
 
   if (!toolName) {
     return {
@@ -65,6 +74,46 @@ const handleToolsCall = async (id: any, userEmail: string, params: any, allowedD
     };
   }
 
+  // 1. Rate Limiting Check (Agnostic per user & adapter)
+  const rateLimitKey = `${adapterName}:${userEmail}`;
+  const rateLimitResult = rateLimiter.checkRateLimit(rateLimitKey);
+  if (!rateLimitResult.allowed) {
+    const retryAfterSec = Math.ceil(rateLimitResult.resetMs / 1000);
+    const reason = `Rate limit exceeded: Too many requests for ${userEmail}. Try again in ${retryAfterSec}s.`;
+    writeAuditLog({
+      requestId: id,
+      userEmail,
+      toolName,
+      status: 'REJECTED',
+      denialReason: reason,
+    });
+    return {
+      jsonrpc: '2.0',
+      id,
+      error: { code: -32000, message: reason },
+    };
+  }
+
+  // 2. Budget Quota Pre-Check (for execution queries)
+  if (toolName.includes('execute_readonly_query')) {
+    const budgetCheck = budgetManager.checkBudget(userEmail);
+    if (!budgetCheck.allowed) {
+      writeAuditLog({
+        requestId: id,
+        userEmail,
+        toolName,
+        status: 'REJECTED',
+        denialReason: budgetCheck.reason,
+      });
+      return {
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32000, message: budgetCheck.reason! },
+      };
+    }
+  }
+
+  // 3. Driver and Scoping Checks
   const driverName = driverManager.getDriverNameForTool(toolName);
   if (!driverName) {
     writeAuditLog({
@@ -96,13 +145,19 @@ const handleToolsCall = async (id: any, userEmail: string, params: any, allowedD
     };
   }
 
+  // 4. Execute Driver Tool with Context
   try {
-    const result = await driverManager.callTool(toolName, args);
+    const result = await driverManager.callTool(toolName, args, context);
     
     let metadata: Record<string, any> | undefined = undefined;
     if (typeof result === 'object' && result !== null && '_audit' in result) {
       metadata = result._audit;
       delete result._audit;
+    }
+
+    // Record actual query bytes billed into user budget
+    if (metadata && typeof metadata.actualBytesBilled === 'number' && metadata.actualBytesBilled > 0) {
+      budgetManager.recordUsage(userEmail, metadata.actualBytesBilled);
     }
 
     // Asumsi bahwa driver mengembalikan objek native JS/TS, kita format sebagai JSON string jika bukan string.
@@ -170,17 +225,30 @@ const handleToolsCall = async (id: any, userEmail: string, params: any, allowedD
   }
 };
 
-export const routeMcpRequest = async (request: McpRequest, userEmail: string, allowedDrivers?: string[]): Promise<McpResponse | null> => {
+export const routeMcpRequest = async (
+  request: McpRequest,
+  contextOrEmail: ToolContext | string,
+  allowedDrivers?: string[]
+): Promise<McpResponse | null> => {
   const { jsonrpc, id, method, params } = request;
 
   if (jsonrpc !== '2.0') {
     return { jsonrpc: '2.0', id: id || null, error: { code: -32600, message: 'Invalid Request: jsonrpc must be "2.0"' } };
   }
 
+  const context: ToolContext = typeof contextOrEmail === 'string'
+    ? {
+        userEmail: contextOrEmail,
+        adapterName: 'unknown',
+        requestId: id || 'unknown',
+        timestamp: new Date().toISOString(),
+      }
+    : contextOrEmail;
+
   try {
     switch (method) {
       case 'initialize':
-        return handleInitialize(id, userEmail);
+        return handleInitialize(id, context.userEmail);
 
       case 'notifications/initialized':
         // Notifications don't have responses
@@ -190,7 +258,7 @@ export const routeMcpRequest = async (request: McpRequest, userEmail: string, al
         return await handleToolsList(id, allowedDrivers);
 
       case 'tools/call':
-        return await handleToolsCall(id, userEmail, params, allowedDrivers);
+        return await handleToolsCall(id, context, params, allowedDrivers);
 
       default: {
         return {

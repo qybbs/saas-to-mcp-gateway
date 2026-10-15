@@ -1,4 +1,5 @@
 import { McpDriver } from '../core/mcp/driver';
+import { ToolContext } from '../core/mcp/context';
 import { 
   listAllowedTables, 
   describeTable, 
@@ -81,7 +82,7 @@ export class BigQueryDriver implements McpDriver {
     ];
   }
 
-  async callTool(name: string, args: any): Promise<any> {
+  async callTool(name: string, args: any, context?: ToolContext): Promise<any> {
     switch (name) {
       case 'list_allowed_tables': {
         const result = await listAllowedTables();
@@ -117,8 +118,15 @@ export class BigQueryDriver implements McpDriver {
         const safety = validateQuerySafety(sql);
         if (!safety.safe) throw new PolicyError(safety.reason!, { tablesTouched: safety.detectedTables, sql });
 
-        const result = await executeReadonlyQuery(sql);
-        (result as any)._audit = { tablesTouched: safety.detectedTables, rowCount: result.length, sql };
+        const result = await executeReadonlyQuery(sql, context);
+        const meta = (result as any)._queryMeta || {};
+        (result as any)._audit = {
+          tablesTouched: safety.detectedTables,
+          rowCount: result.length,
+          sql,
+          jobId: meta.jobId,
+          actualBytesBilled: meta.actualBytesBilled || 0,
+        };
         return result;
       }
 

@@ -80,16 +80,20 @@ Menambahkan pintu masuk bagi platform AI non-Atlassian serta menyediakan antarmu
     *   *Abstraksi Kontrak*: Mendefinisikan interface/abstract class `BaseInboundAdapter` untuk standarisasi pembuatan adapter baru secara mandiri oleh pengembang eksternal.
     *   *Dynamic Loader*: Membangun mekanisme registrasi dinamis agar gateway dapat mendeteksi, memuat, dan mendaftarkan route HTTP untuk adapter kustom berdasarkan konfigurasi pengguna tanpa mengubah kode inti.
 
-### Fase 4: Enterprise Security, Governance & Audit (Guardrails)
-Fitur tingkat enterprise untuk memantau dan mengontrol eksekusi AI agent.
+### Fase 4: Enterprise Security, Governance & Dual-Mode Operations [SELESAI]
+Fitur tingkat enterprise dan personal untuk memantau, mengontrol, dan memberikan fleksibilitas eksekusi AI agent.
 
-*   **Granular Policy Engine**:
-    *   Menerapkan filter kueri yang aman (seperti SQL validator di [`validateQuerySafety`](file:///Users/OUT2305/Repo/bigquery-mcp/src/mcp.ts#L14)) secara dinamis ke semua database driver.
-    *   Membatasi hak akses (*scopes*) berdasarkan identitas pengguna asli dari platform SaaS asal.
+*   **Dual-Mode Architecture (Personal Hub & Enterprise Gateway)**:
+    *   *Personal Mode (Solo Dev)*: Zero-friction local multiplexer tanpa batas rate limit atau kuota budget (`RATE_LIMIT_MAX_REQUESTS=0`, `USER_DAILY_BUDGET_BYTES=0`) untuk Claude Code, Cursor, OpenCode, dan Windsurf.
+    *   *Enterprise Mode (Corporate Governance)*: Multi-tenant gateway dengan throttling sliding-window per adapter/user dan kuota kueri harian per email.
+*   **Rate Limiting & Cost Management (FinOps)**:
+    *   *RateLimiter*: Sliding-window limiter berbasis in-memory/per-user-adapter dengan respons error standar JSON-RPC `-32000` dan header waktu tunggu (`resetMs`).
+    *   *BudgetManager*: Akumulasi konsumsi byte harian (`USER_DAILY_BUDGET_BYTES`) dengan auto-reset UTC midnight dan pre-check proyeksi query byte.
+*   **User Identity Propagation (UIP) & FinOps Attribution**:
+    *   Meneruskan `ToolContext` (`userEmail`, `adapterName`, `requestId`, `clientIp`) secara agnostik ke semua downstream drivers.
+    *   Melampirkan label GCP otomatis (`user_email`, `mcp_adapter`) pada setiap BigQuery Query Job agar biaya dapat diatribusikan ke masing-masing pengguna korporat di GCP Cloud Billing meskipun berjalan di atas Service Account bersama.
 *   **Centralized Audit Logging**:
-    *   Format log JSON yang terstandarisasi untuk dikirim ke Google Cloud Logging, Datadog, atau Elasticsearch.
-*   **Rate Limiting & Cost Management**:
-    *   Pengaturan batas kuota pemanggilan API atau estimasi billing query per pengguna/platform.
+    *   Format log JSON terstruktur yang mencatat identitas user, `toolName`, `requestId`, `actualBytesBilled`, dan `jobId` untuk integrasi Cloud Logging/Datadog.
 
 ---
 
@@ -105,13 +109,13 @@ Selama diskusi kita, ada beberapa detail teknis penting yang membutuhkan keputus
     *   **Tiga Mode Persistensi**: `STATELESS` (JWE-based), `MEMORY` (in-memory map), dan `FIRESTORE` (Google Cloud Firestore integration).
     *   Pengaturan mode persistensi dikonfigurasi melalui variabel lingkungan `DCR_PERSISTENCE_MODE` (wajib diset).
 
-### 2. Sinkronisasi Identitas Pengguna (User Identity Propagation / UIP)
-*   **Tantangan**: AI Agent memanggil API atas nama pengguna akhir (misalnya pengguna "Iqbal" di Slack atau Jira).
-*   **Isu**: Menghindari eksekusi kueri menggunakan token akses dengan izin penuh (*system-wide / god-mode*) untuk menghindari kebocoran data sensitif.
-*   **Solusi Terpilih**:
-    *   **Ekstraksi Klaim Email**: Mengekstrak klaim identitas (`email`) dari JWT token akses OAuth 2.1 yang didelegasikan oleh platform klien.
-    *   **Query Impersonation**: Meneruskan identitas tersebut ke tingkat *data source* (misalnya menggunakan fitur *Impersonation* di BigQuery atau *Row-Level Security* di PostgreSQL) agar kueri dijalankan sesuai batasan akses pengguna tersebut.
-    *   **Tabel Otorisasi Internal**: Menyediakan tabel pemetaan pengguna (`UserMapping`) untuk menetapkan pembatasan kueri/data tertentu berdasarkan domain email atau grup otorisasi pengguna.
+### 2. Sinkronisasi Identitas Pengguna (User Identity Propagation / UIP) [SELESAI]
+*   **Tantangan**: AI Agent memanggil API atas nama pengguna akhir (misalnya karyawan login Microsoft OIDC di Atlassian Rovo atau developer di Cursor).
+*   **Isu**: Menghindari eksekusi kueri menggunakan token akses dengan izin penuh (*system-wide / god-mode*) tanpa jejak kepemilikan dan atribusi biaya.
+*   **Solusi Terimplementasi**:
+    *   **Abstraksi ToolContext**: Meneruskan konteks identitas pengguna asli (`userEmail`), nama adapter inbound (`adapterName`), ID request, dan timestamp secara agnostik ke seluruh driver MCP.
+    *   **FinOps Label Attribution**: BigQuery driver secara otomatis menormalisasi email pengguna dan melampirkannya sebagai label GCP (`user_email`, `mcp_adapter`), memungkinkan pelacakan biaya per karyawan di Google Cloud Billing meskipun menggunakan Service Account terpusat.
+    *   **Audit Metadata**: Setiap kueri BigQuery mengembalikan `jobId` dan `actualBytesBilled` untuk dicatat pada log audit dan dikurangi dari kuota harian user.
 
 ### 3. Latency dari Downstream Bridging
 *   **Tantangan**: Jalur kueri (SaaS Platform -> Gateway -> Downstream MCP -> Database) menambah latensi jaringan yang rentan memicu *timeout* (biasanya batas waktu di Slack/OpenAI adalah 3 detik).

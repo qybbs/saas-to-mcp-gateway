@@ -126,7 +126,7 @@ export class StdioDriver implements McpDriver {
     return this.cachedTools!;
   }
 
-  async callTool(name: string, args: any): Promise<any> {
+  async callTool(name: string, args: any, context?: any): Promise<any> {
     const result = await this.sendRequest('tools/call', {
       name,
       arguments: args

@@ -63,7 +63,15 @@ export const handleMcpRequest = async (req: express.Request, res: express.Respon
   console.log(`[MCP Router] User: ${safeEmail} | Method: ${safeMethod} | ID: ${safeId}`);
   console.log(`[MCP Router] Request length: ${req.body ? JSON.stringify(req.body).length : 0}`);
 
-  const mcpResponse = await routeMcpRequest({ jsonrpc, id, method, params }, userEmail, allowedDrivers);
+  const context = {
+    userEmail,
+    adapterName: 'atlassian',
+    requestId: id || 'unknown',
+    timestamp: new Date().toISOString(),
+    clientIp: req.ip,
+  };
+
+  const mcpResponse = await routeMcpRequest({ jsonrpc, id, method, params }, context, allowedDrivers);
   
   if (mcpResponse === null) {
     return res.status(202).end();

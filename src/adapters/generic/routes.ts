@@ -40,7 +40,8 @@ export const authenticateGeneric = (req: Request, res: Response, next: NextFunct
 export const handleDirectMcpRequest = async (req: Request, res: Response) => {
   const adapterConfig = gatewayConfig?.inboundAdapters?.generic;
   const allowedDrivers = adapterConfig?.allowedDrivers;
-  const userEmail = (req.headers['x-user-email'] as string) || 'generic-agent@gateway.local';
+  const defaultEmail = process.env.LOCAL_USER_EMAIL || 'developer@localhost';
+  const userEmail = (req.headers['x-user-email'] as string) || defaultEmail;
 
   const { jsonrpc, id, method, params } = req.body || {};
 
@@ -49,7 +50,15 @@ export const handleDirectMcpRequest = async (req: Request, res: Response) => {
   const safeId = sanitizeLogString(id);
   console.log(`[Generic HTTP] User: ${safeEmail} | Method: ${safeMethod} | ID: ${safeId}`);
 
-  const mcpResponse = await routeMcpRequest({ jsonrpc, id, method, params }, userEmail, allowedDrivers);
+  const context = {
+    userEmail,
+    adapterName: 'generic',
+    requestId: id || 'unknown',
+    timestamp: new Date().toISOString(),
+    clientIp: req.ip,
+  };
+
+  const mcpResponse = await routeMcpRequest({ jsonrpc, id, method, params }, context, allowedDrivers);
 
   if (mcpResponse === null) {
     return res.status(202).end();

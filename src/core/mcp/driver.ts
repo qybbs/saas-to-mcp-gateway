@@ -1,3 +1,5 @@
+import { ToolContext } from './context';
+
 export enum McpDriverType {
   BIGQUERY = 'bigquery',
   STDIO = 'stdio',
@@ -24,12 +26,12 @@ export interface McpDriver {
   /**
    * Returns a list of tools exposed by this driver.
    */
-  listTools(): Promise<any[]>;
+  listTools(context?: ToolContext): Promise<any[]>;
 
   /**
    * Executes a specific tool by name with the given arguments.
    */
-  callTool(name: string, args: any): Promise<any>;
+  callTool(name: string, args: any, context?: ToolContext): Promise<any>;
 
   /**
    * Cleanly shuts down the driver.
