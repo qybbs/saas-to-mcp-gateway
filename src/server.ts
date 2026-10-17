@@ -80,11 +80,17 @@ app.use('/.well-known/oauth-protected-resource', (req, res) => {
 app.use('/atlassian', atlassianRouter);
 app.use('/generic', genericRouter);
 
-// Root shortcut endpoints for Cursor / Claude Code
+// Root shortcut endpoints for Cursor / Claude Code / Antigravity
 app.get('/sse', authenticateGeneric, (req, res) => {
   const allowedDrivers = gatewayConfig?.inboundAdapters?.generic?.allowedDrivers;
   const userEmail = (req.headers['x-user-email'] as string) || 'generic-agent@gateway.local';
   handleSseConnection(req, res, allowedDrivers, userEmail);
+});
+app.post('/sse', authenticateGeneric, (req, res) => {
+  if (req.query.sessionId) {
+    return handlePostMessages(req, res);
+  }
+  return handleDirectMcpRequest(req, res);
 });
 app.post('/messages', handlePostMessages);
 app.post('/mcp', authenticateGeneric, handleDirectMcpRequest);

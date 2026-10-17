@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import crypto from 'node:crypto';
 import { handleSseConnection, handlePostMessages } from './sse';
 import { routeMcpRequest } from '../../core/mcp/router';
 import { gatewayConfig } from '../../config/gateway.config';
@@ -43,6 +44,11 @@ export const handleDirectMcpRequest = async (req: Request, res: Response) => {
   const defaultEmail = process.env.LOCAL_USER_EMAIL || 'developer@localhost';
   const userEmail = (req.headers['x-user-email'] as string) || defaultEmail;
 
+  // Set / echo mcp-session-id header for MCP HTTP Streamable clients (e.g. Antigravity IDE)
+  const sessionId = (req.headers['mcp-session-id'] as string) || (req.query.sessionId as string) || crypto.randomUUID();
+  res.setHeader('mcp-session-id', sessionId);
+  res.setHeader('Mcp-Session-Id', sessionId);
+
   const { jsonrpc, id, method, params } = req.body || {};
 
   const safeEmail = sanitizeLogString(userEmail);
@@ -85,6 +91,13 @@ genericRouter.get('/sse', (req, res) => {
   const allowedDrivers = adapterConfig?.allowedDrivers;
   const userEmail = (req.headers['x-user-email'] as string) || 'generic-agent@gateway.local';
   handleSseConnection(req, res, allowedDrivers, userEmail);
+});
+
+genericRouter.post('/sse', (req, res) => {
+  if (req.query.sessionId) {
+    return handlePostMessages(req, res);
+  }
+  return handleDirectMcpRequest(req, res);
 });
 
 genericRouter.post('/messages', handlePostMessages);
