@@ -12,16 +12,18 @@ export class StdioDriver implements McpDriver {
   private process: ChildProcess | null = null;
   private messageCounter = 0;
   private pendingRequests = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();
+  private handshake: boolean;
   
   // This will store the cached tools from the downstream server
   private cachedTools: any[] | null = null;
 
-  constructor(config: { name: string; prefix: string; command: string; args?: string[]; env?: Record<string, string | undefined> }) {
+  constructor(config: { name: string; prefix: string; command: string; args?: string[]; env?: Record<string, string | undefined>; handshake?: boolean }) {
     this.name = config.name;
     this.prefix = config.prefix;
     this.command = config.command;
     this.args = config.args || [];
     this.env = config.env;
+    this.handshake = config.handshake ?? true;
   }
 
   async initialize(): Promise<void> {
@@ -62,8 +64,37 @@ export class StdioDriver implements McpDriver {
       });
     }
 
+    // Perform standard MCP handshake before fetching tools
+    if (this.handshake) {
+      await this.performHandshake();
+    }
+
     // Attempt to fetch tools to verify connection and cache them
     await this.fetchToolsFromDownstream();
+  }
+
+  private async performHandshake(): Promise<void> {
+    try {
+      await this.sendRequest('initialize', {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: {
+          name: 'saas-mcp-gateway',
+          version: '1.0.0'
+        }
+      });
+
+      if (this.process && this.process.stdin) {
+        const notif = JSON.stringify({
+          jsonrpc: '2.0',
+          method: 'notifications/initialized',
+          params: {}
+        }) + '\n';
+        this.process.stdin.write(notif, () => {});
+      }
+    } catch (err: any) {
+      console.warn(`[StdioDriver] Optional initialize handshake skipped for ${this.name}: ${err.message}`);
+    }
   }
 
   private handleIncomingMessage(message: any) {
@@ -98,15 +129,32 @@ export class StdioDriver implements McpDriver {
       jsonrpc: '2.0',
       id,
       method,
-      params
+      params: params || {}
     };
 
     return new Promise((resolve, reject) => {
-      this.pendingRequests.set(id, { resolve, reject });
+      const timer = setTimeout(() => {
+        if (this.pendingRequests.has(id)) {
+          this.pendingRequests.delete(id);
+          reject(new Error(`[StdioDriver] Request ${method} (id=${id}) timed out after 15s`));
+        }
+      }, 15000);
+
+      this.pendingRequests.set(id, {
+        resolve: (val) => {
+          clearTimeout(timer);
+          resolve(val);
+        },
+        reject: (err) => {
+          clearTimeout(timer);
+          reject(err);
+        }
+      });
       const payload = JSON.stringify(request) + '\n';
       
       this.process!.stdin!.write(payload, (error) => {
         if (error) {
+          clearTimeout(timer);
           this.pendingRequests.delete(id);
           reject(error);
         }

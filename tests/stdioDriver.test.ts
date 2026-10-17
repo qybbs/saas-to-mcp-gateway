@@ -23,7 +23,9 @@ describe('StdioDriver', () => {
     vi.clearAllMocks();
 
     mockStdin = {
-      write: vi.fn((data, cb) => cb(null))
+      write: vi.fn((data, cb) => {
+        if (typeof cb === 'function') cb(null);
+      })
     };
 
     mockProcess = new EventEmitter();
@@ -40,7 +42,8 @@ describe('StdioDriver', () => {
       name: 'test_stdio',
       prefix: 'stdio_',
       command: 'dummy_cmd',
-      args: ['--test']
+      args: ['--test'],
+      handshake: false
     });
   });
 
@@ -174,6 +177,50 @@ describe('StdioDriver', () => {
       }, 10);
 
       await expect(callPromise).rejects.toThrow('Tool internal error');
+    });
+  });
+
+  describe('handshake', () => {
+    it('harus melakukan initialize & notifications/initialized jika handshake diaktifkan', async () => {
+      const handshakeDriver = new StdioDriver({
+        name: 'test_handshake',
+        prefix: 'hs_',
+        command: 'dummy_cmd',
+        handshake: true
+      });
+
+      // Hook mockStdin to respond to initialize (id: 1) and tools/list (id: 2)
+      mockStdin.write.mockImplementation((data: any, cb: any) => {
+        try {
+          const req = JSON.parse(data.toString());
+          if (req.method === 'initialize') {
+            setTimeout(() => {
+              mockRl.emit('line', JSON.stringify({
+                jsonrpc: '2.0',
+                id: req.id,
+                result: { protocolVersion: '2024-11-05' }
+              }));
+            }, 5);
+          } else if (req.method === 'tools/list') {
+            setTimeout(() => {
+              mockRl.emit('line', JSON.stringify({
+                jsonrpc: '2.0',
+                id: req.id,
+                result: { tools: [{ name: 'tool_hs' }] }
+              }));
+            }, 5);
+          }
+        } catch {}
+        if (typeof cb === 'function') cb(null);
+      });
+
+      await handshakeDriver.initialize();
+      const tools = await handshakeDriver.listTools();
+      expect(tools).toEqual([{ name: 'tool_hs' }]);
+      expect(mockStdin.write).toHaveBeenCalledWith(
+        expect.stringContaining('"method":"initialize"'),
+        expect.any(Function)
+      );
     });
   });
 });

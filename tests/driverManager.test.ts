@@ -121,12 +121,45 @@ describe('DriverManager', () => {
       expect(SseDriver).toHaveBeenCalledWith({
         name: 'testSse',
         prefix: 'testSse_',
-        url: 'http://localhost/sse'
+        url: 'http://localhost/sse',
+        headers: undefined
       });
       expect(mockInit).toHaveBeenCalled();
 
       const tools = await driverManager.getToolsList();
       expect(tools[0].name).toBe('testSse_tool3');
+    });
+
+    it('harus inisialisasi sse driver dengan custom headers', async () => {
+      gatewayConfig.outboundDrivers = {
+        testSseWithHeaders: {
+          type: 'sse',
+          url: 'http://localhost/sse',
+          headers: { 'Authorization': 'Bearer test' }
+        }
+      };
+
+      const mockInit = vi.fn().mockResolvedValue(undefined);
+      vi.mocked(SseDriver).mockImplementation(function() {
+        return {
+          name: 'testSseWithHeaders',
+          prefix: 'testSseWithHeaders_',
+          initialize: mockInit,
+          listTools: vi.fn().mockResolvedValue([]),
+          callTool: vi.fn(),
+          shutdown: vi.fn(),
+        } as any;
+      });
+
+      await driverManager.initialize();
+
+      expect(SseDriver).toHaveBeenCalledWith({
+        name: 'testSseWithHeaders',
+        prefix: 'testSseWithHeaders_',
+        url: 'http://localhost/sse',
+        headers: { 'Authorization': 'Bearer test' }
+      });
+      expect(mockInit).toHaveBeenCalled();
     });
 
     it('harus skip sse driver jika url kosong', async () => {

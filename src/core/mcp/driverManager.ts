@@ -52,7 +52,8 @@ export class DriverManager {
           driver = new SseDriver({
             name: driverName,
             prefix,
-            url: driverConfig.url
+            url: driverConfig.url,
+            headers: driverConfig.headers
           });
           break;
         default:

@@ -13,7 +13,18 @@ rl.on('line', (line) => {
     const message = JSON.parse(line);
     if (message.jsonrpc !== '2.0') return;
 
-    if (message.method === 'tools/list') {
+    if (message.method === 'initialize') {
+      const response = {
+        jsonrpc: '2.0',
+        id: message.id,
+        result: {
+          protocolVersion: '2024-11-05',
+          capabilities: { tools: {} },
+          serverInfo: { name: 'mock-stdio-server', version: '1.0.0' }
+        }
+      };
+      console.log(JSON.stringify(response));
+    } else if (message.method === 'tools/list') {
       const response = {
         jsonrpc: '2.0',
         id: message.id,

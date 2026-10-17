@@ -6,13 +6,15 @@ export class SseDriver implements McpDriver {
   prefix: string;
 
   private endpointUrl: string;
+  private customHeaders: Record<string, string>;
   private cachedTools: any[] | null = null;
   private messageCounter = 0;
 
-  constructor(config: { name: string; prefix: string; url: string }) {
+  constructor(config: { name: string; prefix: string; url: string; headers?: Record<string, string> }) {
     this.name = config.name;
     this.prefix = config.prefix;
     this.endpointUrl = config.url;
+    this.customHeaders = config.headers || {};
   }
 
   async initialize(): Promise<void> {
@@ -37,7 +39,8 @@ export class SseDriver implements McpDriver {
         params
       }, {
         headers: {
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          ...this.customHeaders
         },
         timeout: 10000 // 10 detik timeout
       });

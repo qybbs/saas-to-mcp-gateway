@@ -43,6 +43,37 @@ describe('SseDriver', () => {
       const tools = await driver.listTools();
       expect(tools).toEqual([{ name: 'test_tool' }]);
     });
+
+    it('harus menyertakan custom headers jika diberikan pada config', async () => {
+      const driverWithHeaders = new SseDriver({
+        ...mockConfig,
+        headers: {
+          'X-Custom-Auth': 'Bearer test-token',
+          'DD_API_KEY': 'dd-test-key'
+        }
+      });
+
+      vi.mocked(axios.post).mockResolvedValueOnce({
+        data: {
+          result: {
+            tools: [{ name: 'custom_tool' }]
+          }
+        }
+      });
+
+      await driverWithHeaders.initialize();
+      expect(axios.post).toHaveBeenCalledWith(
+        mockConfig.url,
+        expect.objectContaining({ method: 'tools/list' }),
+        expect.objectContaining({
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+            'X-Custom-Auth': 'Bearer test-token',
+            'DD_API_KEY': 'dd-test-key'
+          })
+        })
+      );
+    });
   });
 
   describe('listTools', () => {

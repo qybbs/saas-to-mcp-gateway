@@ -4,6 +4,7 @@ export interface OutboundDriverConfig {
   args?: string[];
   env?: Record<string, string>;
   url?: string;
+  headers?: Record<string, string>;
 }
 
 export interface InboundAdapterConfig {
