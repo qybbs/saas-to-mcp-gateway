@@ -117,7 +117,34 @@ Standardize and publish enterprise-grade documentation and artifacts for global 
 *   **Consolidation Handbook (`docs/consolidation-guide.md`)**: Step-by-step migration guide for moving fragmented editor MCP configs to the gateway.
 *   **Universal English Localization**: Complete translation of codebase comments, error strings, test suites, and documentation into technical English.
 
-### Phase 7: Dynamic Plugin SDK & Cloud-Native Orchestration [FUTURE]
+### Phase 7: Decoupled BigQuery Driver & Core Engine Purity [PLANNED]
+Extract in-process database drivers into independent MCP repositories to achieve 100% pure architectural decoupling:
+
+*   **Extraction of `custom-bigquery-mcp`**:
+    *   Migrate BigQuery driver logic, SQL policy engine, and allowlist validation from `src/drivers/bigquery*` into a standalone, publishable repository/package (`custom-bigquery-mcp`).
+    *   Enable `custom-bigquery-mcp` to run as a standalone stdio FastMCP server or remote SSE service.
+*   **Gateway Core Decoupling**:
+    *   Remove `@google-cloud/bigquery` from the gateway's core dependencies.
+    *   Register BigQuery in `gateway-mcp-config.json` via standard `stdio` or `sse` outbound driver definitions, treating it identically to the other 10 downstream tools.
+    *   Ensure the gateway remains a 100% vendor-agnostic, lightweight proxy, orchestrator, and governance layer.
+
+### Phase 8: Web UI Management Dashboard & 1-Click MCP Marketplace [PLANNED]
+Transform the gateway from a CLI/config-driven background daemon into a visual, modern AI Gateway management platform (inspired by 9Router, Portkey, and LiteLLM):
+
+*   **Visual Observability & Health Dashboard**:
+    *   *Real-time Adapter & Driver Status*: Visual cards showing active health, connection state, and uptime for all Inbound Adapters (`generic`, `openai`, `atlassian`) and Outbound Drivers.
+    *   *Live Metrics & Traffic Analytics*: Real-time request volume (RPM), latency, active users, error rates, and live streaming audit logs.
+*   **1-Click MCP Marketplace & Dynamic Driver Registry**:
+    *   *Curated MCP Catalog*: Visual marketplace featuring standard community MCP servers (GitHub, Notion, BigQuery, PostgreSQL, ClickHouse, Datadog, Slack, Google Drive, Docker, Puppeteer, etc.).
+    *   *No-Code Driver Installation*: Form-based UI to install and configure drivers (setting commands, arguments, and environment secrets) with automatic update to `gateway-mcp-config.json`.
+    *   *Hot-Reloading*: Dynamic initialization and teardown of outbound drivers without restarting the gateway daemon.
+*   **Interactive Tool Playground**:
+    *   Built-in browser testing tool (Swagger/Postman-style) that renders interactive input forms directly from downstream tool JSON Schemas, allowing developers to execute tools and inspect responses live.
+*   **Visual Scoping & Governance Controls**:
+    *   *Permission Matrix*: Visual toggles to bind allowed drivers to specific inbound adapters (e.g., ChatGPT Action only accesses BigQuery, while Cursor accesses all drivers).
+    *   *Rate Limit & Budget Sliders*: Interactive sliders to adjust sliding-window rate limits and daily query byte budgets per user/adapter.
+
+### Phase 9: Dynamic Plugin SDK & Cloud-Native Orchestration [FUTURE]
 Long-term vision for ecosystem expansion:
 
 *   **Dynamic Plugin System**: Enable external developers to publish inbound/outbound adapters as independent npm packages without modifying gateway core code.
@@ -151,3 +178,11 @@ Long-term vision for ecosystem expansion:
     *   **Persistent Connections & Connection Pooling**: Use HTTP Keep-Alive and connection pooling to eliminate TCP/TLS handshake latency.
     *   **Asynchronous Execution Pattern & Webhooks**: For heavy analytical workloads, the gateway can return `202 Accepted` with a job ID and dispatch completed results to the SaaS platform via Webhook callbacks.
     *   **Caching & Dry-run Projections**: Cache repetitive metadata queries in distributed caches (Redis) with short TTLs.
+
+### 4. Zero-Vendor-Lock Core & Outbound BigQuery Decoupling [PLANNED]
+*   **Challenge**: Having direct BigQuery client dependencies inside the gateway core creates an architectural inconsistency where BigQuery is tightly coupled while other 10 drivers are modular.
+*   **Decision**: Extract BigQuery into `custom-bigquery-mcp`. The gateway core becomes 100% agnostic to underlying database types, relying purely on standard JSON-RPC Stdio/SSE protocols.
+
+### 5. Web UI State Synchronization & Hot-Reloading [PLANNED]
+*   **Challenge**: Updating driver definitions via the Web UI marketplace normally requires restarting the gateway process, disrupting existing active SSE streams from client IDEs.
+*   **Decision**: Implement a hot-reloading driver lifecycle in `DriverManager`, allowing runtime initialization of new drivers and graceful teardown of modified ones without dropping existing client SSE sessions.
