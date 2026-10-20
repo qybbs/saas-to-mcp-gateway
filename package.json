@@ -1,7 +1,7 @@
 {
-  "name": "bigquery-mcp",
-  "version": "1.0.0",
-  "description": "",
+  "name": "saas-to-mcp-gateway",
+  "version": "1.1.0",
+  "description": "Universal, FinOps-aware Enterprise SaaS-to-MCP Gateway connecting coding agents (Cursor, Claude Code, OpenCode, Antigravity, Atlassian Rovo) to downstream tools and data sources with zero secret sprawl.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
@@ -17,8 +17,19 @@
     "build": "tsc",
     "start": "node dist/server.js"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "gateway",
+    "bigquery",
+    "finops",
+    "atlassian-rovo",
+    "cursor",
+    "claude-code",
+    "opencode",
+    "antigravity"
+  ],
+  "author": "Muhammad Iqbal Ghozy",
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {

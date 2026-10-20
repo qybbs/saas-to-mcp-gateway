@@ -1,7 +1,7 @@
 version: '3.8'
 
 services:
-  bigquery-mcp:
+  saas-to-mcp-gateway:
     build:
       context: .
       dockerfile: Dockerfile

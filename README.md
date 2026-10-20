@@ -1,387 +1,347 @@
-# Enterprise SaaS-to-MCP Gateway
+# SaaS-to-MCP Gateway
 
-This project implements a modular, stateless **Enterprise SaaS-to-MCP Gateway** designed to connect enterprise platforms (like Atlassian Rovo) to internal database drivers (initially Google BigQuery) securely, transparently, and with strict query policies.
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
+[![MCP Protocol](https://img.shields.io/badge/MCP%20Protocol-2024--11--05-blueviolet)](https://modelcontextprotocol.io/)
+[![Tools Count](https://img.shields.io/badge/Consolidated%20Tools-199%20Tools-brightgreen)](#consolidated-ecosystem-11-services-199-tools)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](file:///Users/OUT2305/Repo/bigquery-mcp/docker-compose.yaml)
+[![Google Cloud Run](https://img.shields.io/badge/GCP-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)](file:///Users/OUT2305/Repo/bigquery-mcp/docs/docker.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](file:///Users/OUT2305/Repo/bigquery-mcp/LICENSE)
 
-## Features
+> **Enterprise Universal Hub & FinOps Gateway for AI Agents & SaaS Platforms**  
+> Consolidate multi-agent tool access, dynamic SaaS client registration (OAuth 2.1 RFC 7591 / Atlassian Rovo), and enterprise data governance into a single, high-performance TypeScript Model Context Protocol (MCP) gateway.
 
-- **Enterprise SaaS Integration**: Designed as a gateway that bridges external platforms with internal data sources using standard MCP protocol.
-- **Configurable DCR Persistence**: Supports three modes of Dynamic Client Registration (DCR) persistence: `STATELESS` (zero DB dependency via JWE encryption), `MEMORY` (temporary in-memory store), and `FIRESTORE` (production-grade stateful store with Google Cloud Firestore).
-- **Dynamic Client Registration (RFC 7591)**: Supports dynamic registration of MCP clients (e.g., Atlassian Rovo) automatically at runtime.
-- **OAuth 2.1 Authorization Code Flow**: Implements a secure authorization flow with PKCE, utilizing a modular identity layer (Mock / OIDC SSO-ready).
-- **Outbound Drivers**: Bundled with a Google BigQuery driver providing safe schema inspection, cost estimation, and data querying.
-- **Policy Engine**: Centralized safety engine that strips comments, restricts actions to read-only `SELECT` queries, enforces limits (e.g., `LIMIT 1000`, `maximumBytesBilled`), and validates table allowlists.
-- **HTTP Transport**: Uses standard SSE/HTTP transport for remote MCP communications.
+---
 
-## Repository Layout
+## Table of Contents
+
+- [Overview & Value Proposition](#overview--value-proposition)
+- [Dual-Mode Architecture](#dual-mode-architecture)
+- [System Architecture Diagram](#system-architecture-diagram)
+- [Consolidated Ecosystem (11 Services, 199 Tools)](#consolidated-ecosystem-11-services-199-tools)
+- [Quick Start: Local Hub in 2 Minutes](#quick-start-local-hub-in-2-minutes)
+- [Client Configuration Guides (Copy-Paste)](#client-configuration-guides-copy-paste)
+  - [OpenCode CLI](#1-opencode-cli)
+  - [Google Antigravity IDE](#2-google-antigravity-ide)
+  - [Cursor IDE](#3-cursor-ide)
+  - [Claude Code](#4-claude-code)
+- [Enterprise SaaS Integration (Atlassian Rovo)](#enterprise-saas-integration-atlassian-rovo)
+- [BigQuery FinOps Guardrails](#bigquery-finops-guardrails)
+- [Production Deployment (Google Cloud Run & Docker)](#production-deployment-google-cloud-run--docker)
+- [Configuration Reference](#configuration-reference)
+- [Troubleshooting](#troubleshooting)
+- [Security & Governance](#security--governance)
+
+---
+
+## Overview & Value Proposition
+
+As engineering organizations adopt AI coding assistants (**Antigravity**, **OpenCode**, **Cursor**, **Claude Code**, **Windsurf**) alongside enterprise AI knowledge agents (**Atlassian Rovo**), two critical architectural problems emerge:
+
+1. **Tool & Token Sprawl in Developer Machines**: Every coding assistant runs its own isolated set of child processes (`npx`, `docker`, `uvx`) and requires individual API tokens hardcoded across multiple editor configs. When a token expires or rotates, every assistant breaks simultaneously.
+2. **Lack of Governance & FinOps in Enterprise SaaS**: Connecting external AI agents directly to production data warehouses (like BigQuery) risks catastrophic query billings, data leakage, and untracked agent mutations.
+
+**`saas-to-mcp-gateway` solves both challenges simultaneously** via a unified, modular architecture.
+
+---
+
+## Dual-Mode Architecture
+
+The gateway operates seamlessly in two complementary modes:
 
 ```
-bigquery-mcp/
-├── src/                    # TypeScript Source Code
-│   ├── server.ts           # Express Application Entry Point
-│   ├── index.ts            # Entrypoint file for library exports
-│   ├── config/             # Configuration modules
-│   │   └── gateway.config.ts # Environment configuration and validation
-│   ├── core/               # Shared core protocol modules
-│   │   ├── auth/           # OAuth helpers (PKCE, JWE decrypt/encrypt, JWT sign)
-│   │   │   └── helpers.ts
-│   │   ├── logging/        # Centralized audit logging
-│   │   │   └── audit.ts
-│   │   └── mcp/            # Core MCP Policy Engine & stateless JSON-RPC Router
-│   │       ├── policy.ts
-│   │       └── router.ts
-│   ├── drivers/            # Downstream outbound database drivers
-│   │   └── bigquery.ts     # Google BigQuery integration
-│   └── adapters/           # Inbound adapters mapping external platforms to MCP
-│       └── atlassian/      # Atlassian Rovo HTTP/Express adapter (OAuth/MCP endpoints)
-│           ├── mcp.ts
-│           ├── oauth.ts
-│           └── routes.ts
-├── docs/                   # Documentation files
-│   ├── custom-mcp-solutioning.md  # Architectural Decision & Details
-│   ├── cloudflare-tunnel-setup.md # Guide to expose local server to Atlassian
-│   └── project-roadmap.md  # Project phases and milestones
-├── .github/                # GitHub Configurations
-│   └── CODEOWNERS          # Code owners definition
-├── Dockerfile              # Docker container configuration
-├── docker-compose.yaml     # Local container setup (Service + Key binding)
-├── cloudbuild.yaml         # GCP Cloud Build deployment pipeline
-├── LICENSE                 # Open-source MIT License file
-├── .env                    # Local environment config (secrets) - NOT committed
-└── .env.example            # Environment variables example template
+┌────────────────────────────────────────────────────────────────────────┐
+│                        saas-to-mcp-gateway                             │
+├───────────────────────────────────┬────────────────────────────────────┤
+│   Personal Mode (Local Dev Hub)   │   Enterprise Mode (Cloud Run)      │
+├───────────────────────────────────┼────────────────────────────────────┤
+│ • Zero-auth /sse & /generic/mcp   │ • OAuth 2.1 (RFC 7591 DCR + PKCE)  │
+│ • Consolidates 11 local & remote  │ • Microsoft Entra ID (OIDC SSO)    │
+│   tools for AI coding assistants  │ • Stateless JWE / Firestore DCR    │
+│ • Single secret management (.env) │ • FinOps label & budget controls   │
+│ • Eliminates process duplication  │ • Atlassian Rovo agent gateway     │
+└───────────────────────────────────┴────────────────────────────────────┘
 ```
 
-## Available MCP Tools
+1. **Personal Mode (Local Development Hub)**:
+   - Exposes zero-friction endpoints (`GET /sse`, `POST /messages`, and `POST /generic/mcp`) for local coding agents.
+   - Consolidates **199 tools across 11 services** into one persistent background daemon.
+   - All credentials (`GITHUB_PERSONAL_ACCESS_TOKEN`, `SONARQUBE_TOKEN`, `DD_API_KEY`, etc.) live securely in one `.env` file.
+   - Read the complete [Multi-Agent MCP Consolidation Guide](file:///Users/OUT2305/Repo/bigquery-mcp/docs/consolidation-guide.md).
 
-This MCP server exposes the following custom tools to external clients (e.g., Atlassian Rovo) for secure BigQuery interaction:
+2. **Enterprise Mode (Production SaaS Gateway)**:
+   - Exposes `/atlassian/mcp`, `/register`, `/oauth/authorize`, and `/oauth/token`.
+   - Supports Dynamic Client Registration (RFC 7591) for Atlassian Rovo.
+   - Full OAuth 2.1 Authorization Code Flow with PKCE and Microsoft Entra ID OIDC SSO.
+   - User Identity Propagation (UIP): attaches `user_email` and `mcp_adapter` labels to BigQuery execution jobs for precise FinOps cost attribution.
+   - Sliding-window rate limiting and per-user daily byte query quotas.
 
-1. **`list_allowed_tables`**
-   - **Description**: Returns the list of all BigQuery tables currently allowlisted on the server.
-   - **Arguments**: None.
+---
 
-2. **`describe_table`**
-   - **Description**: Retrieves detailed schema information for a specific allowlisted table, including field names, types, descriptions, and partitioning/clustering properties.
-   - **Arguments**:
-     - `datasetId` (string, required): The BigQuery dataset ID.
-     - `tableId` (string, required): The BigQuery table ID.
+## System Architecture Diagram
 
-3. **`estimate_query_cost`**
-   - **Description**: Performs a dry-run execution of a GoogleSQL `SELECT` query. Validates query safety and calculates the projected volume of bytes scanned (costs).
-   - **Arguments**:
-     - `sql` (string, required): The SQL `SELECT` query statement to estimate.
+```mermaid
+graph TD
+    subgraph Clients ["AI Clients & SaaS Platforms"]
+        AG[Antigravity IDE]
+        OC[OpenCode CLI]
+        CR[Cursor IDE / Windsurf]
+        CC[Claude Code]
+        ROVO[Atlassian Rovo Agents]
+    end
 
-4. **`execute_readonly_query`**
-   - **Description**: Executes a read-only GoogleSQL `SELECT` query on the allowed tables. Enforces client-side row capping (max 1000 rows) and database-side cost protection limits (`MAX_BYTES_BILLED`).
-   - **Arguments**:
-     - `sql` (string, required): The SQL `SELECT` query statement to execute.
+    subgraph Gateway ["saas-to-mcp-gateway (Port 3000)"]
+        direction TB
+        IN_GEN[Generic Adapter<br/>/sse & /generic/mcp]
+        IN_ATL[Atlassian Adapter<br/>OAuth 2.1 + DCR RFC 7591]
+        
+        AUTH[Auth Guard & UIP<br/>User Identity Propagation]
+        FINOPS[FinOps Policy Engine<br/>• Read-only AST check<br/>• Dry-run gate<br/>• Budget Manager<br/>• Rate Limiter]
+        REGISTRY[Outbound Client Registry<br/>• Dynamic tool namespacing: driver_tool<br/>• Process & SSE Lifecycle Management]
+    end
 
-5. **`search_allowed_tables`**
-   - **Description**: Searches allowlisted tables and their schemas by a keyword (e.g., 'transaction'). Returns matching tables, their metadata, partitioning, and full schemas in a single request.
-   - **Arguments**:
-     - `keyword` (string, required): The search keyword to filter datasets and table names.
+    subgraph Ecosystem ["11 Downstream Services (199 Tools)"]
+        BQ[(Google BigQuery<br/>Native Driver + FinOps)]
+        GH[GitHub MCP<br/>Repos, PRs, Issues]
+        NOTION[Notion MCP<br/>Pages, DBs, Markdown]
+        DD[Datadog APM<br/>Logs, Traces, Metrics]
+        SQ[SonarQube<br/>Quality Gate, Issues]
+        CH[(ClickHouse Cloud<br/>OLAP Analytics)]
+        CS[ClickStack<br/>Traces & Telemetry]
+        CTX[Context7<br/>Live Library Docs]
+        LI[LinkedIn MCP<br/>Professional Network]
+        CHD[ClickHouse Docs<br/>SQL Knowledge]
+        ATL_REM[Atlassian Remote<br/>Jira & Confluence]
+    end
 
-## Prerequisites
+    AG -->|HTTP/SSE| IN_GEN
+    OC -->|HTTP/SSE| IN_GEN
+    CR -->|HTTP/SSE| IN_GEN
+    CC -->|HTTP/SSE| IN_GEN
+    ROVO -->|HTTPS OAuth 2.1| IN_ATL
 
-- Node.js (v18+)
-- Google Cloud Project with BigQuery API enabled.
-- **Google Cloud Service Account (GCP IAM)**:
-  - `roles/bigquery.dataViewer` (Required to read table schemas and rows).
-  - `roles/bigquery.jobUser` (Required to run queries and dry-runs).
+    IN_GEN --> AUTH
+    IN_ATL --> AUTH
+    AUTH --> FINOPS
+    FINOPS --> REGISTRY
 
-## Setup
-
-1.  **Clone the repository:**
-    ```bash
-    git clone <repository-url>
-    cd bigquery-mcp
-    ```
-
-2.  **Install dependencies:**
-    ```bash
-    npm install
-    ```
-
-3.  **Environment Variables:**
-    Create a `.env` file in the root directory and populate it with the following:
-
-    ```env
-    PORT=3000
-    # Generate a random 32-byte base64 string for this
-    MASTER_SECRET_KEY="your-secure-base64-encoded-32-byte-key-here"
-    
-    # DCR Persistence Mode: STATELESS, MEMORY, or FIRESTORE
-    DCR_PERSISTENCE_MODE=STATELESS
-    
-    # Path to your Google Cloud Service Account JSON key file
-    GOOGLE_APPLICATION_CREDENTIALS="./your-service-account-key.json"
-    
-    # Your Google Cloud Project ID
-    GOOGLE_CLOUD_PROJECT="your-gcp-project-id"
-    
-    # Authentication Mode: MOCK or OIDC
-    AUTH_PROVIDER=OIDC
-    OIDC_CLIENT_ID=your-oidc-client-id
-    OIDC_CLIENT_SECRET=your-oidc-client-secret
-    OIDC_AUTHORIZATION_ENDPOINT=https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize
-    OIDC_TOKEN_ENDPOINT=https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token
-    OIDC_REDIRECT_URI=https://your-tunnel-domain.trycloudflare.com/oauth/callback
-    ```
-    *Note: Do not commit your service account key file or OIDC secrets.*
-
-4.  **Build the project:**
-    ```bash
-    npm run build
-    ```
-
-## Enterprise Integration Setup
-
-### 1. Microsoft Entra ID (SSO) Integration
-
-To enable and test Microsoft Entra ID (formerly Azure Active Directory) as your Single Sign-On (SSO) OIDC provider, follow these steps:
-
-#### Step 1: Register your Application in Microsoft Entra ID
-1. Log in to the [Microsoft Entra admin center](https://entra.microsoft.com/) or Azure Portal.
-2. Go to **Identity** > **Applications** > **App registrations** and select **New registration**.
-3. Fill in the registration form:
-   - **Name**: e.g., `BigQuery MCP Server`.
-   - **Supported account types**: Choose who can use the API (e.g., *Accounts in this organizational directory only* for single-tenant or *Accounts in any organizational directory* for multi-tenant).
-   - **Redirect URI**: Select **Web** from the dropdown and input your public endpoint callback:
-     - For production: `https://<your-mcp-domain>/oauth/callback`
-     - For local testing: `https://<your-tunnel-domain>.ngrok-free.app/oauth/callback` *(Note: Entra ID requires HTTPS for redirect URIs, so local testing requires a tunnel like ngrok or Cloudflare Tunnel).*
-4. Click **Register**.
-
-#### Step 2: Create a Client Secret
-1. In your app registration page, navigate to **Certificates & secrets** > **Client secrets** tab.
-2. Click **New client secret**, enter a description, set your preferred expiration, and click **Add**.
-3. **Important**: Instantly copy the secret value under the **Value** column. You will not be able to retrieve it after leaving this screen.
-
-#### Step 3: Get Client & Tenant ID
-1. Navigate back to the app **Overview** page.
-2. Copy the **Application (client) ID**.
-3. Copy the **Directory (tenant) ID** (required for single-tenant setup).
-
-#### Step 4: Verify API Permissions
-1. Navigate to **API permissions**.
-2. By default, `User.Read` permission is added. Double check that the application supports the standard OpenID Connect permissions: `openid`, `email`, and `profile` scopes (which are typically requested and approved by default under Microsoft Graph).
-
-#### Step 5: Configure the `.env` File
-Update your `.env` file with the OIDC details obtained:
-```env
-# Set provider to OIDC
-AUTH_PROVIDER=OIDC
-
-# Microsoft Entra ID credentials
-OIDC_CLIENT_ID="<Application (client) ID>"
-OIDC_CLIENT_SECRET="<Client Secret Value>"
-
-# Endpoints (Replace {tenant} with your Directory (tenant) ID or 'common'/'organizations' for multi-tenant)
-OIDC_AUTHORIZATION_ENDPOINT="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/authorize"
-OIDC_TOKEN_ENDPOINT="https://login.microsoftonline.com/{tenant}/oauth2/v2.0/token"
-
-# Public Redirect URI
-OIDC_REDIRECT_URI="https://<your-tunnel-domain>/oauth/callback"
-
-# Optional: Restrict authentication to corporate email domains only
-ALLOWED_EMAIL_DOMAINS="yourcompany.com,anotheralloweddomain.com"
+    REGISTRY --> BQ
+    REGISTRY --> GH
+    REGISTRY --> NOTION
+    REGISTRY --> DD
+    REGISTRY --> SQ
+    REGISTRY --> CH
+    REGISTRY --> CS
+    REGISTRY --> CTX
+    REGISTRY --> LI
+    REGISTRY --> CHD
+    REGISTRY --> ATL_REM
 ```
 
-#### Step 6: Test the SSO Flow
-1. If testing locally, start your tunnel (e.g., `ngrok http 3000` or `cloudflared tunnel --url http://localhost:3000`) and ensure the redirect URL in both Azure and `.env` match the tunnel address.
-2. Run your server locally in development mode: `npm run dev`.
-3. When your client triggers the authorization flow (by visiting `https://<your-mcp-domain>/oauth/authorize?...`), the server will detect `AUTH_PROVIDER=OIDC` and redirect you to the Microsoft login screen.
-4. Sign in with your Microsoft account. On success, Microsoft redirects to your `/oauth/callback` endpoint, where your server validates the email against `ALLOWED_EMAIL_DOMAINS` and routes the user back to the client application.
+---
 
-### 2. Atlassian Administration Integration
-To securely connect this MCP server to your Atlassian workspace, it must meet these requirements:
-- **Publicly accessible over HTTPS** with a valid TLS certificate.
-- **Streamable HTTP transport** (supported by this server out-of-the-box).
-- **OAuth 2.1 with PKCE** and **Dynamic Client Registration (DCR)** (supported and configured via the `.env` file).
+## Consolidated Ecosystem (11 Services, 199 Tools)
 
-**Registration Steps:**
-1. Navigate to **Atlassian Administration** and select your organization.
-2. From the sidebar menu, expand **Apps** > **Sites**, then select the site where the MCP server will be added.
-3. Select **Connected apps** > Expand the dropdown button beside **Explore apps**.
-4. Select **Add external MCP server**.
-5. Read the disclaimers, then select **Agree and continue**.
-6. Select **Custom MCP server** from the list and enter your MCP server's base URL (e.g., `https://<your-mcp-domain>`).
-7. Complete the authorization flow. The server will dynamically register Atlassian as a client using DCR.
-8. Once connected, your team can access the tools in Atlassian Studio to build Rovo Agents.
+Every tool exposed by the gateway hub is cleanly namespaced as `{driver}_{originalToolName}`, eliminating collisions and enabling clear driver routing:
 
-## Usage as an NPM Module (Library)
+| Driver | Transport / Bridge | Tools | Highlighted Capabilities | Required Env Vars |
+| :--- | :--- | :---: | :--- | :--- |
+| **`bigquery`** | Native TypeScript | **5** | Safe schema inspection, dry-run cost estimation, read-only SQL with FinOps labels & row caps | `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT` |
+| **`github`** | `npx @modelcontextprotocol/server-github` | **26** | Issues, pull requests, file search, commits, branch management, code search | `GITHUB_PERSONAL_ACCESS_TOKEN` |
+| **`notion`** | `npx @notionhq/notion-mcp-server` | **24** | Search pages, read databases, retrieve markdown, update content blocks | `NOTION_API_KEY` |
+| **`datadog`** | `mcp-remote` SSE Bridge | **30** | Logs analysis, trace spans, metrics aggregation, incident lookup, APM skills | `DD_API_KEY`, `DD_APP_KEY`, `DD_SITE` |
+| **`sonarqube`**| `npx sonarqube-api-mcp` | **8** | Quality gate status, rule details, issue context, remediation fix plans | `SONARQUBE_URL`, `SONARQUBE_TOKEN` |
+| **`clickhouse`**| `mcp-remote` SSE Bridge | **17** | Analytical queries, database & table listing, slow query pattern diagnostics | `CLICKHOUSE_URL`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD` |
+| **`clickstack`**| `mcp-remote` SSE Bridge | **33** | SQL queries, time series metrics, distributed trace waterfalls, telemetry signals | `CLICKSTACK_API_KEY`, `CLICKSTACK_SERVICE_ID` |
+| **`context7`** | `mcp-remote` SSE Bridge | **2** | Real-time up-to-date documentation for any modern software library or framework | `CONTEXT7_API_KEY` |
+| **`linkedin`** | `uvx mcp-server-linkedin` | **20** | Profile lookup, company posts, job search, network messaging | `LINKEDIN_COOKIE` |
+| **`clickhouse-docs`** | `mcp-remote` SSE Bridge | **2** | Semantic search across ClickHouse documentation and SQL dialect guides | *(Public / None)* |
+| **`atlassian`**| `mcp-remote` SSE Bridge | **32** | Confluence pages, Jira issue management, worklogs, transitions, JQL search | `ATLASSIAN_API_TOKEN`, `ATLASSIAN_EMAIL` |
+| **Total** | | **199** | | |
 
-This server can be used as an imported library in another Node.js project (such as an AI Gateway). 
+---
 
-1. **Build the project** to generate the distribution files:
-   ```bash
-   npm run build
-   ```
-2. **Import the core handlers** into your project:
-   ```typescript
-   import { 
-     handleMcpRequest, 
-     validateQuerySafety, 
-     registerClient 
-   } from 'bigquery-mcp';
-   ```
-   The `dist/index.js` and `dist/index.d.ts` files expose all core MCP, OAuth, and BigQuery tools, allowing you to mount them directly onto your own Express server or routing layer.
+## Quick Start: Local Hub in 2 Minutes
 
-## Production Deployment (Google Cloud Run)
-
-This repository is designed to be deployed to Google Cloud Run as a stateless container.
-
-### Docker Containerization & CI/CD
-This project includes a GitHub Actions workflow (`.github/workflows/release-docker.yml`) that automatically builds and pushes the Docker image to the **GitHub Container Registry (GHCR)** whenever a new release or tag (`v*`) is pushed to the repository.
-
-To run the Docker image locally or in production, you must inject the necessary configuration via Environment Variables:
-- **BigQuery Limits**: `MAX_BYTES_BILLED`, `ROW_LIMIT`
-- **Security & Authorization**: `ALLOWED_EMAIL_DOMAINS`, `ALLOWED_REDIRECT_URIS`, `TOKEN_EXPIRATION`, `TOKEN_EXPIRATION_SECONDS`
-- **Authentication & Persistence**: `MASTER_SECRET_KEY`, `AUTH_PROVIDER`, `DCR_PERSISTENCE_MODE` (options: `STATELESS`, `MEMORY`, `FIRESTORE`), and OIDC specific variables.
-
-Example running the container locally:
+### 1. Clone & Install
 ```bash
-docker run -p 3000:3000 \
-  -e MAX_BYTES_BILLED=10737418240 \
-  -e ROW_LIMIT=1000 \
-  -e ALLOWED_EMAIL_DOMAINS="example.com" \
-  -e MASTER_SECRET_KEY="<your-base64-key>" \
-  -v $(pwd)/service-account.json:/app/service-account.json \
-  -e GOOGLE_APPLICATION_CREDENTIALS="/app/service-account.json" \
-  ghcr.io/<your-github-username>/bigquery-mcp:latest
+git clone https://github.com/qybbs/saas-to-mcp-gateway.git
+cd saas-to-mcp-gateway
+npm install
 ```
 
-### Deployment Commands
-Use Google Cloud Build and Artifact Registry:
+### 2. Configure Environment
 ```bash
-# Build and push to Artifact Registry
-gcloud builds submit --tag asia-southeast1-docker.pkg.dev/<GCP_PROJECT>/<REPO_NAME>/bigquery-mcp:latest
-
-# Deploy to Cloud Run (Allow unauthenticated ingress; authentication is handled at the application layer via OAuth 2.1)
-gcloud run deploy bigquery-mcp \
-  --image asia-southeast1-docker.pkg.dev/<GCP_PROJECT>/<REPO_NAME>/bigquery-mcp:latest \
-  --region asia-southeast1 \
-  --allow-unauthenticated \
-  --set-env-vars="MASTER_SECRET_KEY=...,AUTH_PROVIDER=OIDC,..."
+cp .env.example .env
 ```
+Edit `.env` and fill in the API keys for the services you use (unused drivers will gracefully stay inactive).
 
-## Health Checking & Monitoring
-
-The service exposes the following endpoints for liveness and readiness probes in Cloud Run or Kubernetes:
-- `GET /` and `GET /health`
-  Returns `{"status": "ok", "service": "Enterprise SaaS-to-MCP Gateway"}` (HTTP 200).
-
-## Running the Server
-
-**Development Mode (with auto-reload):**
+### 3. Build & Start
 ```bash
-npm run dev
-```
+# Compile TypeScript to dist/
+npm run build
 
-**Production Mode:**
-```bash
+# Start the gateway daemon
 npm start
 ```
 
-## Exposing Locally (for testing with external clients)
-
-To test the OAuth flow with external clients like Atlassian Rovo, you need to expose your local server to the internet. You can use tools like ngrok or Cloudflare Tunnels:
-
+### 4. Verify Health
 ```bash
-# Using ngrok
-ngrok http 3000
-
-# Using Cloudflare Tunnel (Quick Tunnel)
-cloudflared tunnel --url http://localhost:3000
+curl http://localhost:3000/generic/health
+# {"status":"ok","service":"saas-to-mcp-gateway","version":"1.1.0","tools_count":199}
 ```
 
-Update your client configuration to point to the generated ngrok/Cloudflare URL.
+---
 
-## TypeScript Version Compatibility Note
-If you encounter `TypeError: Cannot read properties of undefined (reading 'fileExists')` when running `npm run dev` with `ts-node-dev`, it is likely due to compatibility issues with newer or beta TypeScript versions.
-To fix this, ensure you use stable versions in `package.json` (such as TypeScript `5.7.3` and `@types/node` matched to your Node environment, e.g., `@types/node@20`):
+## Client Configuration Guides (Copy-Paste)
+
+### 1. OpenCode CLI
+In `~/.config/opencode/opencode.jsonc`:
+```jsonc
+{
+  "mcp": {
+    "gateway-hub": {
+      "type": "remote",
+      "url": "http://localhost:3000/sse"
+    }
+  }
+}
+```
+
+### 2. Google Antigravity IDE
+In `~/.gemini/config/mcp_config.json`:
+```json
+{
+  "mcpServers": {
+    "gateway-hub": {
+      "url": "http://localhost:3000/sse"
+    }
+  }
+}
+```
+
+### 3. Cursor IDE
+In `~/.cursor/mcp.json` or `.cursor/mcp.json`:
+```json
+{
+  "mcpServers": {
+    "gateway-hub": {
+      "url": "http://localhost:3000/sse"
+    }
+  }
+}
+```
+
+### 4. Claude Code
+Run in your terminal:
 ```bash
-npm install -D typescript@5.7.3 @types/node@20 ts-node-dev
+claude mcp add --transport sse gateway-hub http://localhost:3000/sse
 ```
 
-## Local Testing (Simulation Workflow)
-Before connecting to Atlassian Rovo, you can test the entire registration, OAuth 2.1 authentication (mock login), and JSON-RPC tool calling locally.
+---
 
-### 1. Dynamic Client Registration (DCR)
-Register a mock client (using `https://httpbin.io/get` as a redirect URI helper to inspect redirected parameters):
+## Enterprise SaaS Integration (Atlassian Rovo)
+
+The gateway allows enterprise platforms (like Atlassian Rovo) to discover and call internal database tools securely.
+
+### Registration in Atlassian Administration:
+1. Ensure your gateway is exposed over HTTPS (via Cloud Run or Cloudflare Tunnel: `cloudflared tunnel --url http://localhost:3000`).
+2. Navigate to **Atlassian Administration** > **Apps** > **Connected apps**.
+3. Select **Add external MCP server** > **Custom MCP server**.
+4. Enter the base URL: `https://your-domain.com`.
+5. Atlassian will dynamically register via RFC 7591 (`POST /register`), initiate OAuth 2.1 PKCE authorization (`/oauth/authorize`), and exchange codes for tokens (`/oauth/token`).
+6. Once connected, enterprise users can query allowed BigQuery datasets via Atlassian Chat and Studio Agents.
+
+### Supported DCR Persistence Modes:
+- `STATELESS` (Default): Stores client metadata encrypted in the JWE `client_id` with zero database dependencies.
+- `MEMORY`: In-memory hashmap for local testing.
+- `FIRESTORE`: Stateful, distributed client repository on Google Cloud Firestore.
+
+---
+
+## BigQuery FinOps Guardrails
+
+The gateway enforces a strict 4-step sequence on all BigQuery operations:
+
+```
+[1. Discovery]   --> bigquery_list_allowed_tables / search_allowed_tables
+        ↓
+[2. Inspection]  --> bigquery_describe_table
+        ↓
+[3. Cost Gate]   --> bigquery_estimate_query_cost (Mandatory Dry-Run)
+        ↓
+[4. Execution]   --> bigquery_execute_readonly_query (Read-only + FinOps Labels)
+```
+
+1. **Table Allowlisting**: Only datasets and tables listed in `ALLOWLIST_TABLES` can be queried.
+2. **Comment Stripping & AST Validation**: Eliminates SQL injection and blocks mutative keywords (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`).
+3. **Cost Protection**: Enforces `MAX_BYTES_BILLED` on every query (e.g. max 10 GB per job).
+4. **FinOps Attribution**: Automatically tags Google Cloud BigQuery jobs with sanitized user metadata labels:
+   - `user_email`: Sanitized user email (e.g. `user_example_com`).
+   - `mcp_adapter`: Originating adapter (`atlassian` or `generic`).
+
+---
+
+## Production Deployment (Google Cloud Run & Docker)
+
+### Deploying to Google Cloud Run
 ```bash
-curl -X POST http://localhost:3000/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "client_name": "Local Test Client",
-    "redirect_uris": ["https://httpbin.io/get"]
-  }'
-```
-*Save the `client_id` returned in the JSON response.*
+# 1. Build and push container to Google Artifact Registry
+gcloud builds submit --tag asia-southeast1-docker.pkg.dev/<GCP_PROJECT>/<REPO>/saas-to-mcp-gateway:1.1.0
 
-### 2. Authorization Code (PKCE Sim)
-Construct the authorization URL, replacing `<CLIENT_ID>` with the one from Step 1:
-```text
-http://localhost:3000/oauth/authorize?client_id=<CLIENT_ID>&redirect_uri=https://httpbin.io/get&code_challenge=test_verifier_123&code_challenge_method=plain&state=test_state
+# 2. Deploy stateless service to Cloud Run
+gcloud run deploy saas-to-mcp-gateway \
+  --image asia-southeast1-docker.pkg.dev/<GCP_PROJECT>/<REPO>/saas-to-mcp-gateway:1.1.0 \
+  --region asia-southeast1 \
+  --allow-unauthenticated \
+  --set-env-vars="MASTER_SECRET_KEY=...,AUTH_PROVIDER=OIDC,DCR_PERSISTENCE_MODE=STATELESS"
 ```
-1. Open the URL in your browser.
-2. Log in using `user@example.com` and password `secret-password`.
-3. The page will redirect you to `httpbin.io`.
-4. Copy the `code` query parameter value from the browser's address bar or the JSON response.
 
-### 3. Token Exchange
-Exchange the authorization code for a JWT Access Token:
+### Local Docker Compose
 ```bash
-curl -X POST http://localhost:3000/oauth/token \
-  -H "Content-Type: application/json" \
-  -d '{
-    "grant_type": "authorization_code",
-    "client_id": "<CLIENT_ID>",
-    "code": "<AUTHORIZATION_CODE>",
-    "redirect_uri": "https://httpbin.io/get",
-    "code_verifier": "test_verifier_123"
-  }'
+docker-compose up -d
 ```
-*Save the `access_token` returned in the JSON response.*
 
-### 4. Calling MCP Tools
-Use the `access_token` as a Bearer token to communicate with the `/mcp` transport:
+---
 
-* **List Tools:**
-  ```bash
-  curl -X POST http://localhost:3000/mcp \
-    -H "Authorization: Bearer <ACCESS_TOKEN>" \
-    -H "Content-Type: application/json" \
-    -d '\''{"jsonrpc": "2.0", "method": "tools/list", "params": {}, "id": 1}'\''
-  ```
+## Configuration Reference
 
-* **List Allowed Tables:**
-  ```bash
-  curl -X POST http://localhost:3000/mcp \
-    -H "Authorization: Bearer <ACCESS_TOKEN>" \
-    -H "Content-Type: application/json" \
-    -d '\''{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "list_allowed_tables", "arguments": {}}, "id": 2}'\''
-  ```
+Key variables in `.env`:
 
-* **Execute Readonly Query:**
-  ```bash
-  curl -X POST http://localhost:3000/mcp \
-    -H "Authorization: Bearer <ACCESS_TOKEN>" \
-    -H "Content-Type: application/json" \
-    -d '{"jsonrpc": "2.0", "method": "tools/call", "params": {"name": "execute_readonly_query", "arguments": {"sql": "SELECT COUNT(1) FROM `bigquery-public-data.chicago_taxi_trips.taxi_trips`"}}, "id": 3}'
-  ```
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `PORT` | HTTP port for the gateway server | `3000` |
+| `MASTER_SECRET_KEY` | 32-byte Base64 secret key for JWE / JWT signing | *(Required in Production)* |
+| `DCR_PERSISTENCE_MODE` | Dynamic Client Registration store (`STATELESS`, `MEMORY`, `FIRESTORE`) | `STATELESS` |
+| `AUTH_PROVIDER` | Inbound auth provider (`MOCK` or `OIDC`) | `MOCK` |
+| `ALLOWED_EMAIL_DOMAINS` | Restrict OAuth login to specific corporate email domains | `*` |
+| `MAX_BYTES_BILLED` | Maximum allowed BigQuery bytes scanned per query (FinOps limit) | `10737418240` (10 GB) |
+| `ROW_LIMIT` | Hard cap on row results returned to LLMs | `1000` |
+| `DAILY_USER_QUERY_QUOTA_MB` | Daily query limit per user | `51200` (50 GB) |
+| `USER_RATE_LIMIT_RPM` | Rate limit per user (requests per minute) | `60` |
+
+---
 
 ## Troubleshooting
 
-| Symptom | Cause / Fix |
-|---|---|
-| `401 Unauthorized` | Invalid or expired JWT Bearer Token. Ensure the token exchange in Step 3 succeeded and that the correct token is copied. |
-| `Rejected: Query mengandung keyword terlarang` | The query contains non-SELECT operations (e.g. `INSERT`, `UPDATE`, `DROP`) or denied keywords. The Policy Engine enforces strictly read-only execution. |
-| `Rejected: Tabel "..." tidak terdaftar` | You are attempting to query a table not configured in the `ALLOWLIST_TABLES` environment variable. |
-| `maximumBytesBilled limit exceeded` | The query scans more bytes than allowed by `MAX_BYTES_BILLED` in `.env` (default 1GB). Optimize your query using partition filters or increase limits in `.env`. |
-| `DCR Endpoint error (400 Bad Request)` | Client registration failed. Ensure the request payload conforms to RFC 7591 (e.g. valid `redirect_uris`). |
-| `TypeScript fileExists error` | Compatibility issue with newer/beta TypeScript version. Run `npm install -D typescript@5.7.3 @types/node@20 ts-node-dev` as detailed in the TypeScript compatibility note. |
+| Symptom | Cause | Solution |
+| :--- | :--- | :--- |
+| `session not found` on client connect | MCP client connected without initializing SSE session | Use `/sse` endpoint and ensure client adheres to MCP SSE specification. |
+| `401 Unauthorized` | Invalid, missing, or expired Bearer Token | Re-authenticate or check `MASTER_SECRET_KEY` consistency across restarts. |
+| `Rejected: Query mengandung keyword terlarang` | Query contains non-`SELECT` statements or comments | Ensure query is strictly read-only and free of SQL comment blocks. |
+| `maximumBytesBilled limit exceeded` | Query exceeds configured byte scanning cap | Optimize SQL filters using partitioned/clustered columns or adjust `MAX_BYTES_BILLED`. |
+| `Driver [...] is disabled or failed to start` | Missing API credentials or executable | Check corresponding `_API_KEY` or `_TOKEN` in `.env` and verify required CLI tools (`npx`, `uvx`) are installed. |
 
-## Security Notes
+---
 
-- **Secrets Management**: The `.env` file and your Google Service Account key file contain highly sensitive credentials and **must never be committed** to git. Keep them listed in `.gitignore`.
-- **Key Rotation**: Rotate the `MASTER_SECRET_KEY` periodically. Note that rotating this key will invalidate all existing active sessions/tokens generated with the previous key.
-- **TLS/HTTPS Requirement**: In a production environment (such as Google Cloud Run), ensure the server is configured to run behind HTTPS/TLS 1.2+ to secure all OAuth endpoints and tool-calling transactions in transit.
-- **IAM Minimization**: The GCP Service Account used by this MCP server should strictly be granted only `roles/bigquery.dataViewer` and `roles/bigquery.jobUser` roles to prevent unauthorized access to other GCP resources.
+## Security & Governance
+
+- **Credential Hygiene**: The gateway strictly loads secrets from `.env` or cloud secret managers. Never commit `.env` or Service Account JSON files.
+- **Audit Logging**: Every tool execution is recorded with timestamp, user email, tool name, arguments summary, and BigQuery job ID/bytes scanned.
+- **Principle of Least Privilege**: The GCP Service Account requires only `roles/bigquery.dataViewer` and `roles/bigquery.jobUser`.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](file:///Users/OUT2305/Repo/bigquery-mcp/LICENSE).
