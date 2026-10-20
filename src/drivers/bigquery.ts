@@ -47,7 +47,8 @@ const getTableMetadata = async (tableConfig: string) => {
   try {
     const dataset = projectId ? bigquery.dataset(datasetId, { projectId }) : bigquery.dataset(datasetId);
     const table = dataset.table(tableId);
-    const [metadata] = await table.getMetadata();
+    const metadataOptions = process.env.GCP_PROJECT_ID ? { userProject: process.env.GCP_PROJECT_ID } : undefined;
+    const [metadata] = await table.getMetadata(metadataOptions);
     
     return {
       table: tableConfig,
@@ -97,7 +98,8 @@ export const describeTable = async (datasetId: string, tableId: string) => {
 
   const dataset = projectId ? bigquery.dataset(datasetId, { projectId }) : bigquery.dataset(datasetId);
   const table = dataset.table(tableId);
-  const [metadata] = await table.getMetadata();
+  const metadataOptions = process.env.GCP_PROJECT_ID ? { userProject: process.env.GCP_PROJECT_ID } : undefined;
+  const [metadata] = await table.getMetadata(metadataOptions);
 
   const fields = (metadata.schema?.fields || []).map((f: any) => ({
     name: f.name,
