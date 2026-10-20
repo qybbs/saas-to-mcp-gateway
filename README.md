@@ -88,12 +88,14 @@ graph TD
         CR[Cursor IDE / Windsurf]
         CC[Claude Code]
         ROVO[Atlassian Rovo Agents]
+        GPT[ChatGPT Custom GPTs / Assistants]
     end
 
     subgraph Gateway ["saas-to-mcp-gateway (Port 3000)"]
         direction TB
         IN_GEN[Generic Adapter<br/>/sse & /generic/mcp]
         IN_ATL[Atlassian Adapter<br/>OAuth 2.1 + DCR RFC 7591]
+        IN_OAI[OpenAI Action Adapter<br/>OpenAPI 3.1.0 & REST]
         
         AUTH[Auth Guard & UIP<br/>User Identity Propagation]
         FINOPS[FinOps Policy Engine<br/>• Read-only AST check<br/>• Dry-run gate<br/>• Budget Manager<br/>• Rate Limiter]
@@ -119,9 +121,11 @@ graph TD
     CR -->|HTTP/SSE| IN_GEN
     CC -->|HTTP/SSE| IN_GEN
     ROVO -->|HTTPS OAuth 2.1| IN_ATL
+    GPT -->|HTTPS REST OpenAPI| IN_OAI
 
     IN_GEN --> AUTH
     IN_ATL --> AUTH
+    IN_OAI --> AUTH
     AUTH --> FINOPS
     FINOPS --> REGISTRY
 
@@ -256,6 +260,44 @@ The gateway allows enterprise platforms (like Atlassian Rovo) to discover and ca
 - `STATELESS` (Default): Stores client metadata encrypted in the JWE `client_id` with zero database dependencies.
 - `MEMORY`: In-memory hashmap for local testing.
 - `FIRESTORE`: Stateful, distributed client repository on Google Cloud Firestore.
+
+---
+
+## OpenAI Custom GPTs & ChatGPT Actions Integration
+
+The gateway natively translates downstream MCP tools into dynamic **OpenAPI 3.1.0 JSON** schemas and REST endpoints (`/openai/*`), allowing any Custom GPT or OpenAI Assistant to invoke corporate data and tools.
+
+### 1. Dynamic OpenAPI Specification (`GET /openai/openapi.json`)
+ChatGPT Custom GPTs enforce a hard limit of **maximum 30 operations per Action schema**. Because our gateway consolidates nearly 200 tools, use query parameters to import specific drivers or tools:
+
+```text
+# Import all BigQuery tools (5 operations)
+https://your-domain.com/openai/openapi.json?drivers=bigquery
+
+# Import BigQuery and GitHub tools (31 ops -> use tool filter to stay under 30)
+https://your-domain.com/openai/openapi.json?drivers=bigquery,github
+
+# Import exact subset of tools
+https://your-domain.com/openai/openapi.json?tools=bigquery_search_allowed_tables,bigquery_execute_readonly_query,github_search_repositories
+```
+
+### 2. Setup in ChatGPT Custom GPT Builder:
+1. Open [ChatGPT GPT Editor](https://chatgpt.com/gpts/editor).
+2. Go to **Configure** > **Actions** > **Create new action**.
+3. Under **Schema**, click **Import from URL**.
+4. Enter your gateway URL with driver filters, e.g.:
+   `https://your-domain.com/openai/openapi.json?drivers=bigquery`
+5. **Authentication**:
+   - If `OPENAI_ADAPTER_API_KEY` is configured in `.env`, set **Authentication type** to `API Key`, **Auth Type** to `Bearer` (or `Custom` with Header Name `X-API-Key`), and paste your secret key.
+   - If `OPENAI_ADAPTER_API_KEY` is empty, set **Authentication type** to `None`.
+6. Test your Action directly inside the ChatGPT preview playground!
+
+### 3. REST Action Execution (`POST /openai/tools/:toolName`)
+OpenAI calls are routed through the gateway's core governance pipeline:
+- Respects **User Identity Propagation (UIP)** (`ToolContext.adapterName = 'openai'`).
+- Enforces sliding-window rate limiting (returns HTTP `429 Too Many Requests` on quota breaches).
+- Enforces BigQuery dry-run cost estimation and daily byte budget caps.
+- Generates structured JSON audit logs for Cloud Logging and Datadog.
 
 ---
 

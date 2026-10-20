@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import atlassianRouter from './adapters/atlassian/routes';
 import genericRouter, { authenticateGeneric, handleDirectMcpRequest } from './adapters/generic/routes';
+import openaiRouter from './adapters/openai/routes';
 import { handleSseConnection, handlePostMessages } from './adapters/generic/sse';
 import { validateEnv, gatewayConfig } from './config/gateway.config';
 import { driverManager } from './core/mcp/driverManager';
@@ -79,6 +80,7 @@ app.use('/.well-known/oauth-protected-resource', (req, res) => {
 // Mount Inbound Adapters
 app.use('/atlassian', atlassianRouter);
 app.use('/generic', genericRouter);
+app.use('/openai', openaiRouter);
 
 // Root shortcut endpoints for Cursor / Claude Code / Antigravity
 app.get('/sse', authenticateGeneric, (req, res) => {

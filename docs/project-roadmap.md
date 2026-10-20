@@ -68,9 +68,10 @@ Add entry points for non-Atlassian AI platforms, support declarative multi-drive
     *   *Direct Streamable HTTP / JSON-RPC*: Provide direct POST (`POST /generic/mcp` and root `/mcp`) for stateless testing and curl invocations.
     *   *Authentication*: Support optional API Key validation (`Authorization: Bearer <key>` or `X-API-Key: <key>`).
     *   *Packaging*: Provide standard `SKILL.md` defining guardrails, tool discovery lifecycle (Discovery -> Schema -> Cost Estimation -> Execution), and setup guides for Cursor & Claude Code.
-*   **OpenAI Action Adapter**:
-    *   *Protocol Translation*: Automatically translate MCP tool schemas into **OpenAPI (Swagger) JSON** specifications.
-    *   *Authentication*: Expose standard authentication endpoints (OAuth 2.0 or Static API Key) recognizable by OpenAI Assistants.
+*   **OpenAI Action Adapter [COMPLETED]**:
+    *   *Protocol Translation*: Automatically translate registered MCP tool schemas into **OpenAPI 3.1.0 JSON** specifications (`GET /openai/openapi.json`), featuring dynamic driver filtering (`?drivers=...`) and tool filtering (`?tools=...`) to respect ChatGPT's 30-operation Action limit.
+    *   *REST Action Execution*: Expose REST invocation endpoints (`POST /openai/tools/:toolName`) mapped cleanly to HTTP status codes (200, 400, 401, 403, 404, 429, 500) and routed through the core governance pipeline (`routeMcpRequest`).
+    *   *Authentication & Security*: Support API Key validation (`Authorization: Bearer <token>` or `X-API-Key`) with dynamic OpenAPI security scheme generation and `OPENAI_ADAPTER_API_KEY` enforcement.
 *   **GitHub Copilot Extension Adapter**:
     *   *Authentication*: Verify incoming GitHub App JWT signatures.
     *   *Mapping*: Map Copilot Agent interaction payloads into MCP tool calls.
