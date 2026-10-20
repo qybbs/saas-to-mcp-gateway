@@ -3,7 +3,7 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { routeMcpRequest } from '../../core/mcp/router';
 import { sanitizeLogString } from '../../core/logging/audit';
 
-// Sesi aktif SSE yang disimpan di memori
+// Active SSE sessions stored in memory
 const activeTransports = new Map<string, SSEServerTransport>();
 
 export const getActiveTransportsCount = (): number => {
@@ -15,7 +15,7 @@ export const clearActiveTransports = (): void => {
     try {
       transport.close();
     } catch {
-      // Abaikan error saat cleanup
+      // Ignore errors during cleanup
     }
   }
   activeTransports.clear();
@@ -30,7 +30,7 @@ export const handleSseConnection = async (
   const safeEmail = sanitizeLogString(userEmail);
   console.log(`[Generic SSE] New SSE connection request from user: ${safeEmail}`);
 
-  // Tentukan path endpoint POST messages yang sesuai dengan prefix mount saat ini
+  // Determine the POST messages endpoint path matching the current mount prefix
   const endpointPath = req.baseUrl ? `${req.baseUrl}/messages` : '/messages';
 
   const transport = new SSEServerTransport(endpointPath, res);

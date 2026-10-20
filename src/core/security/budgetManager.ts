@@ -36,13 +36,13 @@ export class BudgetManager {
   }
 
   /**
-   * Memeriksa apakah penggunaan user saat ini (ditambah estimasi byte kueri mendatang)
-   * masih berada di dalam batas kuota harian.
+   * Checks whether the user's current usage (plus incoming projected query bytes)
+   * is within their daily budget quota.
    */
   checkBudget(userEmail: string, incomingEstimateBytes: number = 0, customDailyLimit?: number): BudgetResult {
     const maxBytes = customDailyLimit ?? this.getMaxDailyBytes();
 
-    // Jika kuota <= 0, fitur budgeting dinonaktifkan (Personal Mode / Unlimited)
+    // If quota <= 0, budgeting is disabled (Personal Mode / Unlimited)
     if (maxBytes <= 0) {
       return {
         allowed: true,
@@ -76,7 +76,7 @@ export class BudgetManager {
   }
 
   /**
-   * Mencatat konsumsi byte aktual setelah kueri berhasil dieksekusi.
+   * Records actual byte consumption after a query executes successfully.
    */
   recordUsage(userEmail: string, actualBytes: number): void {
     if (actualBytes <= 0) return;
@@ -87,7 +87,7 @@ export class BudgetManager {
   }
 
   /**
-   * Mengambil informasi penggunaan saat ini untuk user
+   * Retrieves current usage information for a user.
    */
   getUsage(userEmail: string, customDailyLimit?: number): { usedBytes: number; maxBytes: number; remainingBytes: number; date: string } {
     const key = this.getTodayKey(userEmail);
@@ -104,7 +104,7 @@ export class BudgetManager {
   }
 
   /**
-   * Reset data penggunaan (berguna untuk testing)
+   * Resets usage data (useful for testing)
    */
   clear(): void {
     this.dailyUsage.clear();

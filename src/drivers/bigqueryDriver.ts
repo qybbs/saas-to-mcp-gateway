@@ -20,8 +20,8 @@ export class BigQueryDriver implements McpDriver {
   }
 
   async initialize(): Promise<void> {
-    // Klien BigQuery diinisialisasi secara sinkron di './bigquery',
-    // sehingga tidak ada operasi asinkron yang perlu dilakukan di sini.
+    // The BigQuery client is initialized synchronously in './bigquery',
+    // thus no asynchronous operations are required here.
   }
 
   async listTools(): Promise<any[]> {
@@ -144,6 +144,6 @@ export class BigQueryDriver implements McpDriver {
   }
 
   async shutdown(): Promise<void> {
-    // Tidak ada resource persisten yang perlu ditutup secara manual untuk bigquery client di sini.
+    // No persistent resources need to be manually closed for the BigQuery client here.
   }
 }

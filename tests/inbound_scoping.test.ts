@@ -96,7 +96,7 @@ describe('Inbound Scoping Enforcement (allowedDrivers)', () => {
   });
 
   describe('Atlassian Adapter (allowedDrivers: [bigquery])', () => {
-    it('tools/list hanya mengembalikan tools dari bigquery', async () => {
+    it('tools/list should only return tools from bigquery', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -112,7 +112,7 @@ describe('Inbound Scoping Enforcement (allowedDrivers)', () => {
       expect(tools.some((t: any) => t.name === 'sonarqube_get_issues')).toBe(false);
     });
 
-    it('harus menolak pemanggilan tools dari driver sonarqube dengan status 403', async () => {
+    it('should reject tool execution from sonarqube driver with 403 status', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -131,7 +131,7 @@ describe('Inbound Scoping Enforcement (allowedDrivers)', () => {
       expect(res.body.error.message).toContain('Access Denied: You do not have permission to use tools from driver sonarqube');
     });
 
-    it('harus menolak request path URL jika driver tidak diizinkan di config (/atlassian/sonarqube/mcp)', async () => {
+    it('should reject request path URL if driver is not permitted in config (/atlassian/sonarqube/mcp)', async () => {
       const res = await request(app)
         .post('/atlassian/sonarqube/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -145,7 +145,7 @@ describe('Inbound Scoping Enforcement (allowedDrivers)', () => {
       expect(res.body.error.message).toContain('Driver "sonarqube" is not allowed for this adapter');
     });
 
-    it('harus mengizinkan pemanggilan tools dari bigquery yang diizinkan', async () => {
+    it('should allow tool execution from allowed bigquery driver', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -165,7 +165,7 @@ describe('Inbound Scoping Enforcement (allowedDrivers)', () => {
   });
 
   describe('Generic Adapter (allowedDrivers: [sonarqube])', () => {
-    it('tools/list hanya mengembalikan tools dari sonarqube', async () => {
+    it('tools/list should only return tools from sonarqube', async () => {
       const res = await request(app)
         .post('/generic/mcp')
         .send({
@@ -180,7 +180,7 @@ describe('Inbound Scoping Enforcement (allowedDrivers)', () => {
       expect(tools.some((t: any) => t.name === 'bigquery_query_data')).toBe(false);
     });
 
-    it('harus menolak pemanggilan tools dari driver bigquery dengan status 403', async () => {
+    it('should reject tool execution from bigquery driver with 403 status', async () => {
       const res = await request(app)
         .post('/generic/mcp')
         .send({

@@ -54,23 +54,23 @@ describe('bigquery module', () => {
   });
 
   describe('isTableAllowlisted', () => {
-    it('harus mengenali tabel tanpa project ID yang ada di allowlist', () => {
+    it('should recognize table without project ID that is in allowlist', () => {
       expect(bigquery.isTableAllowlisted('dataset1', 'table1')).toBe(true);
     });
 
-    it('harus mengenali tabel dengan project ID yang ada di allowlist', () => {
+    it('should recognize table with project ID that is in allowlist', () => {
       expect(bigquery.isTableAllowlisted('dataset2', 'table2')).toBe(true);
     });
 
-    it('harus mengabaikan case (case-insensitive)', () => {
+    it('should ignore case (case-insensitive)', () => {
       expect(bigquery.isTableAllowlisted('DATASET1', 'TABLE1')).toBe(true);
     });
 
-    it('harus mengembalikan false untuk tabel yang tidak terdaftar', () => {
+    it('should return false for unlisted tables', () => {
       expect(bigquery.isTableAllowlisted('dataset3', 'table3')).toBe(false);
     });
 
-    it('harus mengenali tabel dari environment variable multiline (dengan newline dan spasi)', () => {
+    it('should recognize tables from multiline environment variable (with newlines and spaces)', () => {
       process.env.ALLOWLIST_TABLES = `
         dataset_a.table_a,
         dataset_b.table_b
@@ -81,7 +81,7 @@ describe('bigquery module', () => {
   });
 
   describe('listAllowedTables', () => {
-    it('harus mengambil metadata dari tabel-tabel di allowlist', async () => {
+    it('should retrieve metadata from allowlisted tables', async () => {
       const tables = await bigquery.listAllowedTables();
       expect(tables).toHaveLength(2);
       expect(tables[0].name).toBe('table1');
@@ -92,11 +92,11 @@ describe('bigquery module', () => {
   });
 
   describe('describeTable', () => {
-    it('harus membuang error jika tabel tidak terdaftar', async () => {
+    it('should throw error if table is not allowlisted', async () => {
       await expect(bigquery.describeTable('dataset3', 'table3')).rejects.toThrow(/not in the allowlist/);
     });
 
-    it('harus mengembalikan skema untuk tabel yang diizinkan', async () => {
+    it('should return schema for allowed table', async () => {
       const schema = await bigquery.describeTable('dataset1', 'table1');
       expect(schema.table).toBe('dataset1.table1');
       expect(schema.fields).toHaveLength(2);
@@ -106,7 +106,7 @@ describe('bigquery module', () => {
   });
 
   describe('estimateQueryCost', () => {
-    it('harus menghitung estimasi biaya berdasarkan dryRun', async () => {
+    it('should estimate cost based on dryRun', async () => {
       const estimate = await bigquery.estimateQueryCost('SELECT * FROM dataset1.table1');
       expect(estimate.valid).toBe(true);
       expect(estimate.bytesScanned).toBe(1073741824); // 1 GB
@@ -116,7 +116,7 @@ describe('bigquery module', () => {
   });
 
   describe('executeReadonlyQuery', () => {
-    it('harus mengeksekusi query dan membatasi maxResults client-side', async () => {
+    it('should execute query and limit maxResults client-side', async () => {
       const results = await bigquery.executeReadonlyQuery('SELECT * FROM dataset1.table1');
       expect(results).toHaveLength(1);
       expect(results[0].id).toBe('1');

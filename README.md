@@ -328,7 +328,7 @@ Key variables in `.env`:
 | :--- | :--- | :--- |
 | `session not found` on client connect | MCP client connected without initializing SSE session | Use `/sse` endpoint and ensure client adheres to MCP SSE specification. |
 | `401 Unauthorized` | Invalid, missing, or expired Bearer Token | Re-authenticate or check `MASTER_SECRET_KEY` consistency across restarts. |
-| `Rejected: Query mengandung keyword terlarang` | Query contains non-`SELECT` statements or comments | Ensure query is strictly read-only and free of SQL comment blocks. |
+| `Rejected: Query contains forbidden keyword` | Query contains non-`SELECT` statements or comments | Ensure query is strictly read-only and free of SQL comment blocks. |
 | `maximumBytesBilled limit exceeded` | Query exceeds configured byte scanning cap | Optimize SQL filters using partitioned/clustered columns or adjust `MAX_BYTES_BILLED`. |
 | `Driver [...] is disabled or failed to start` | Missing API credentials or executable | Check corresponding `_API_KEY` or `_TOKEN` in `.env` and verify required CLI tools (`npx`, `uvx`) are installed. |
 

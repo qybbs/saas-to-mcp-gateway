@@ -136,15 +136,15 @@ export const authorizeUser = async (req: express.Request, res: express.Response)
     res.setHeader('Set-Cookie', `oauth_flow=${flowToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=900${isSecure ? '; Secure' : ''}`);
 
     const isError = req.query.error === 'login_failed';
-    const errorMessage = isError ? '<div class="error-msg" style="padding:10px;background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.4);border-radius:6px;margin-bottom:15px;text-align:center;">Otorisasi Gagal: Kredensial Salah</div>' : '';
+    const errorMessage = isError ? '<div class="error-msg" style="padding:10px;background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.4);border-radius:6px;margin-bottom:15px;text-align:center;">Authorization Failed: Invalid Credentials</div>' : '';
 
     const html = `
       <!DOCTYPE html>
-      <html lang="id">
+      <html lang="en">
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Enterprise SaaS-to-MCP Gateway Otorisasi</title>
+        <title>Enterprise SaaS-to-MCP Gateway Authorization</title>
         <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
           body {
@@ -237,7 +237,7 @@ export const authorizeUser = async (req: express.Request, res: express.Response)
       <body>
         <div class="card">
           <div class="logo">Corporate</div>
-          <div class="title">Mock SSO Otorisasi</div>
+          <div class="title">Mock SSO Authorization</div>
           <div class="subtitle">Personal project test login</div>
           ${errorMessage}
           <form action="${escapeHtml(req.baseUrl)}${escapeHtml(prefix)}/oauth/login" method="POST">
@@ -252,7 +252,7 @@ export const authorizeUser = async (req: express.Request, res: express.Response)
               <input type="password" id="password" name="password" required placeholder="••••••••">
             </div>
             
-            <button type="submit" class="btn">Otorisasi & Masuk</button>
+            <button type="submit" class="btn">Authorize & Sign In</button>
           </form>
         </div>
       </body>

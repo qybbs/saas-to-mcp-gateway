@@ -7,10 +7,10 @@ import { gatewayConfig } from '../../config/gateway.config';
 
 export class DriverManager {
   private drivers: Map<string, McpDriver> = new Map();
-  // Map dari toolName ke nama driver pemiliknya
+  // Map of toolName to its owning driver name
   private toolRegistry: Map<string, string> = new Map();
   
-  // Untuk menyimpan agregasi metadata tools
+  // Store aggregated tool metadata
   private cachedToolsList: any[] = [];
 
   async initialize(): Promise<void> {
@@ -82,7 +82,7 @@ export class DriverManager {
         const tools = await driver.listTools();
         
         for (const tool of tools) {
-          // Namespace nama tool jika driver memiliki prefix
+          // Namespace tool name if the driver has a configured prefix
           const namespacedName = driver.prefix ? `${driver.prefix}${tool.name}` : tool.name;
           
           this.cachedToolsList.push({
@@ -124,7 +124,7 @@ export class DriverManager {
       throw new Error(`Driver ${driverName} is not active.`);
     }
 
-    // Hilangkan prefix sebelum mengirim request ke downstream
+    // Strip namespace prefix before forwarding tool call downstream
     let originalName = namespacedName;
     if (driver.prefix && namespacedName.startsWith(driver.prefix)) {
       originalName = namespacedName.substring(driver.prefix.length);
@@ -147,5 +147,5 @@ export class DriverManager {
   }
 }
 
-// Export sebuah instance singleton untuk digunakan oleh router
+// Export singleton instance for router usage
 export const driverManager = new DriverManager();

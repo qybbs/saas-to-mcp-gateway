@@ -1,16 +1,16 @@
 # Multi-Agent MCP Consolidation Guide
 
-Panduan langkah-demi-langkah bagi pengembang dan tim engineering untuk **mengonsolidasikan seluruh MCP server lokal** yang tersebar di berbagai coding agent (**Antigravity IDE**, **OpenCode**, **Cursor**, **Claude Code**, **Windsurf**) ke dalam satu **SaaS-to-MCP Gateway Hub** terpusat (`http://localhost:3000/sse`).
+A step-by-step handbook for engineers and development teams to **consolidate fragmented local MCP servers** across multiple coding agents (**Antigravity IDE**, **OpenCode**, **Cursor**, **Claude Code**, **Windsurf**) into a single, centralized **SaaS-to-MCP Gateway Hub** (`http://localhost:3000/sse`).
 
 ---
 
-## 1. Mengapa Perlu Konsolidasi? (The "Aha!" Moment)
+## 1. Why Consolidate? (The "Aha!" Moment)
 
-Ketika seorang developer atau tim menggunakan lebih dari satu AI coding assistant, biasanya muncul masalah fragmentasi:
+When a developer or engineering team uses more than one AI coding assistant, fragmentation quickly becomes a bottleneck:
 
 ```mermaid
 graph TD
-    subgraph Fragmented ["Sebelum: Fragmentasi Token & Overhead Tinggi"]
+    subgraph Fragmented ["Before: Token Sprawl & High Overhead"]
         AG1[Antigravity IDE] -->|Hardcoded JSON Token| SQ1[SonarQube Docker]
         AG1 -->|Local Personal Token| GH1[GitHub Docker]
         AG1 -->|NPX Child Process| CH1[ClickHouse Remote]
@@ -23,17 +23,17 @@ graph TD
     end
 ```
 
-### Masalah Nyata yang Terjadi:
-1. **Token Sprawl & Maintenance Nightmare**: Token SonarQube, GitHub, dan Datadog harus dimasukkan berulang kali di tiap file konfigurasi editor (`mcp_config.json`, `opencode.jsonc`, `.cursor/mcp.json`). Begitu token kedaluwarsa, seluruh agent serempak gagal (`401 Unauthorized` / `403 Forbidden`).
-2. **Pemborosan Resource Mesin**: Tiap editor menjalankan child process Node/Python/Docker-nya sendiri secara terpisah untuk tool yang sama.
-3. **Cross-Agent Isolation**: OpenCode memiliki tool Datadog dan Context7 tetapi tidak bisa mengakses BigQuery. Antigravity memiliki BigQuery dan Notion tetapi tidak memiliki Datadog.
-4. **Biaya Cloud Tidak Terkontrol**: Tidak ada batasan query harian (*daily quota*) atau pelabelan (*FinOps billing tags*) jika agent menjalankan kueri data berulang kali.
+### Real-World Problems:
+1. **Token Sprawl & Maintenance Nightmare**: SonarQube, GitHub, and Datadog tokens have to be entered repeatedly across multiple editor configs (`mcp_config.json`, `opencode.jsonc`, `.cursor/mcp.json`). Once a token expires, all agents fail simultaneously (`401 Unauthorized` / `403 Forbidden`).
+2. **Machine Resource Waste**: Each editor spins up its own separate Node/Python/Docker child processes for the exact same tools.
+3. **Cross-Agent Tool Isolation**: OpenCode has Datadog and Context7 but lacks BigQuery. Antigravity has BigQuery and Notion but lacks Datadog.
+4. **Uncontrolled Cloud Costs**: No daily query quotas or FinOps billing tags if agents run repeated analytical queries.
 
-### Solusi: SaaS-to-MCP Gateway Hub
+### The Solution: SaaS-to-MCP Gateway Hub
 
 ```mermaid
 graph TD
-    subgraph Unified ["Sesudah: Satu Gateway Hub Lokal Terpusat"]
+    subgraph Unified ["After: Single Centralized Local Gateway Hub"]
         AG2[Antigravity IDE] -->|Single Connection http://localhost:3000/sse| GW[SaaS-to-MCP Gateway]
         OC2[OpenCode CLI] -->|Single Connection http://localhost:3000/sse| GW
         CR2[Cursor / Claude Code] -->|Single Connection http://localhost:3000/sse| GW
@@ -45,21 +45,21 @@ graph TD
 
 ---
 
-## 2. Metodologi Konsolidasi 5 Langkah
+## 2. Five-Step Consolidation Methodology
 
-### Langkah 1: Audit Konfigurasi Editor yang Ada
-Periksa file konfigurasi masing-masing editor di mesin Anda:
+### Step 1: Audit Existing Editor Configurations
+Inspect each editor's configuration file on your machine:
 - **Antigravity IDE**: `~/.gemini/config/mcp_config.json`
 - **OpenCode**: `~/.config/opencode/opencode.jsonc`
-- **Cursor**: `~/.cursor/mcp.json` atau `.cursor/mcp.json` di workspace
+- **Cursor**: `~/.cursor/mcp.json` or `.cursor/mcp.json` in your workspace
 - **Claude Code**: `~/.claude.json`
 
-Catat:
-1. URL atau command yang dipanggil (`npx`, `docker`, `uvx`, HTTP/SSE).
-2. Kredensial atau token yang dibutuhkan (`API_KEY`, `TOKEN`, `headers`).
+Note:
+1. The transport URL or execution command (`npx`, `docker`, `uvx`, HTTP/SSE).
+2. Required credentials and headers (`API_KEY`, `TOKEN`, `headers`).
 
 > [!TIP]
-> Buat salinan cadangan (*backup*) sebelum mengubah konfigurasi asli:
+> Create backup copies before modifying original editor configs:
 > ```bash
 > cp ~/.gemini/config/mcp_config.json ~/.gemini/config/mcp_config.json.backup
 > cp ~/.config/opencode/opencode.jsonc ~/.config/opencode/opencode.jsonc.backup
@@ -67,11 +67,11 @@ Catat:
 
 ---
 
-### Langkah 2: Sentralisasi Seluruh Kredensial ke `.env` Gateway
-Pindahkan seluruh token ke satu file `.env` di direktori gateway:
+### Step 2: Centralize All Credentials into the Gateway `.env`
+Move all tokens to a single `.env` file in the gateway root directory:
 
 ```env
-# Port & Personal Mode (Unthrottled & Unlimited untuk Local Dev)
+# Port & Personal Mode (Unthrottled & Unlimited for Local Dev)
 PORT=3000
 DCR_PERSISTENCE_MODE=STATELESS
 RATE_LIMIT_MAX_REQUESTS=0
@@ -90,8 +90,8 @@ DD_APPLICATION_KEY=your-datadog-app-key
 
 ---
 
-### Langkah 3: Daftarkan Downstream Drivers di `gateway-mcp-config.json`
-Gunakan interpolasi `${VAR_NAME}` dinamis agar rahasia tidak pernah ter-commit ke git:
+### Step 3: Register Downstream Drivers in `gateway-mcp-config.json`
+Use dynamic `${VAR_NAME}` substitution so secrets are never committed to git:
 
 ```json
 {
@@ -201,17 +201,17 @@ Gunakan interpolasi `${VAR_NAME}` dinamis agar rahasia tidak pernah ter-commit k
 
 ---
 
-### Langkah 4: Jalankan Gateway Hub di Latar Belakang
+### Step 4: Run the Gateway Hub in the Background
 
 ```bash
-# 1. Build kode TypeScript
+# 1. Build TypeScript code
 npm run build
 
-# 2. Jalankan server (atau gunakan PM2 / Docker)
+# 2. Start the gateway daemon (or run via Docker / PM2)
 npm start
 ```
 
-Periksa log konsol untuk memastikan seluruh driver berhasil diinisialisasi:
+Verify in console logs that all drivers initialize cleanly:
 ```
 [DriverManager] Initialized driver: bigquery
 [DriverManager] Initialized driver: sonarqube
@@ -223,10 +223,10 @@ Enterprise SaaS-to-MCP Gateway is running at http://localhost:3000
 
 ---
 
-### Langkah 5: Sederhanakan Konfigurasi Seluruh Klien
+### Step 5: Simplify All Client Configurations
 
 #### 1. OpenCode (`~/.config/opencode/opencode.jsonc`)
-Hapus semua server yang duplikat/gagal, sisakan hanya `gateway-hub`:
+Replace duplicate or failing servers with a single `gateway-hub` entry:
 ```jsonc
   "mcp": {
     "gateway-hub": {
@@ -235,7 +235,7 @@ Hapus semua server yang duplikat/gagal, sisakan hanya `gateway-hub`:
     }
   }
 ```
-Verifikasi dengan `opencode mcp list`:
+Verify status with `opencode mcp list`:
 ```
 ┌  MCP Servers
 │
@@ -245,7 +245,7 @@ Verifikasi dengan `opencode mcp list`:
 ```
 
 #### 2. Antigravity IDE (`~/.gemini/config/mcp_config.json`)
-Sederhanakan menjadi:
+Consolidate into:
 ```json
 {
   "mcpServers": {
@@ -278,12 +278,12 @@ claude mcp add --transport sse gateway-hub http://localhost:3000/sse
 
 ---
 
-## 3. Hasil & Manfaat Nyata
+## 3. Results & Tangible Benefits
 
-| Indikator | Sebelum Konsolidasi | Sesudah Konsolidasi |
+| Metric | Before Consolidation | After Consolidation |
 | :--- | :--- | :--- |
-| **Penyimpanan Token** | Tercecer di 3 file konfigurasi | **1 file tunggal (`.env`)** |
-| **Server Failures di OpenCode** | 3 server error (`401`, `403`) | **0 error (`✓ connected`)** |
-| **Total Tools Tersedia** | Terfragmentasi (10–15 per editor) | **199 Tools serentak di semua editor** |
-| **Process Daemon** | Banyak background child process | **1 central multiplexer process** |
-| **FinOps & Audit** | Tidak ada | **Labeling billing GCP & JSON audit logs** |
+| **Secret Management** | Scattered across multiple config files | **Single source of truth (`.env`)** |
+| **OpenCode Client Failures** | 3 broken servers (`401`, `403`) | **0 errors (`✓ connected`)** |
+| **Total Available Tools** | Fragmented (10–15 per editor) | **199 Unified Tools across all editors** |
+| **Background Processes** | Numerous redundant child processes | **1 central multiplexer process** |
+| **FinOps & Governance** | None | **GCP billing labels & structured audit logs** |

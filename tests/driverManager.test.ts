@@ -26,12 +26,12 @@ describe('DriverManager', () => {
   });
 
   describe('initialize', () => {
-    it('harus skip jika tidak ada outboundDrivers', async () => {
+    it('should skip if there are no outboundDrivers', async () => {
       gatewayConfig.outboundDrivers = undefined as any;
       await expect(driverManager.initialize()).resolves.toBeUndefined();
     });
 
-    it('harus inisialisasi bigquery driver', async () => {
+    it('should initialize bigquery driver', async () => {
       gatewayConfig.outboundDrivers = {
         testBq: { type: 'bigquery' }
       };
@@ -59,7 +59,7 @@ describe('DriverManager', () => {
       expect(tools[0].name).toBe('testBq_tool1');
     });
 
-    it('harus inisialisasi stdio driver', async () => {
+    it('should initialize stdio driver', async () => {
       gatewayConfig.outboundDrivers = {
         testStdio: { type: 'stdio', command: 'node', args: ['-v'], env: { MOCK: '1' } }
       };
@@ -90,7 +90,7 @@ describe('DriverManager', () => {
       expect(tools[0].name).toBe('testStdio_tool2');
     });
 
-    it('harus skip stdio driver jika command kosong', async () => {
+    it('should skip stdio driver if command is empty', async () => {
       gatewayConfig.outboundDrivers = {
         testStdioBad: { type: 'stdio' } as any
       };
@@ -98,7 +98,7 @@ describe('DriverManager', () => {
       expect(StdioDriver).not.toHaveBeenCalled();
     });
 
-    it('harus inisialisasi sse driver', async () => {
+    it('should initialize sse driver', async () => {
       gatewayConfig.outboundDrivers = {
         testSse: { type: 'sse', url: 'http://localhost/sse' }
       };
@@ -130,7 +130,7 @@ describe('DriverManager', () => {
       expect(tools[0].name).toBe('testSse_tool3');
     });
 
-    it('harus inisialisasi sse driver dengan custom headers', async () => {
+    it('should initialize sse driver with custom headers', async () => {
       gatewayConfig.outboundDrivers = {
         testSseWithHeaders: {
           type: 'sse',
@@ -162,7 +162,7 @@ describe('DriverManager', () => {
       expect(mockInit).toHaveBeenCalled();
     });
 
-    it('harus skip sse driver jika url kosong', async () => {
+    it('should skip sse driver if url is empty', async () => {
       gatewayConfig.outboundDrivers = {
         testSseBad: { type: 'sse' } as any
       };
@@ -170,7 +170,7 @@ describe('DriverManager', () => {
       expect(SseDriver).not.toHaveBeenCalled();
     });
 
-    it('harus skip tipe driver yang tidak dikenal', async () => {
+    it('should skip unknown driver types', async () => {
       gatewayConfig.outboundDrivers = {
         unknownDriver: { type: 'magic' } as any
       };
@@ -179,7 +179,7 @@ describe('DriverManager', () => {
       expect(tools).toHaveLength(0);
     });
 
-    it('harus handle error jika driver gagal inisialisasi', async () => {
+    it('should handle error if driver initialization fails', async () => {
       gatewayConfig.outboundDrivers = {
         failDriver: { type: 'bigquery' }
       };
@@ -196,7 +196,7 @@ describe('DriverManager', () => {
         } as any;
       });
 
-      // Seharusnya tidak melempar error, tapi ditangkap di catch block dan di log
+      // Should not throw error, but caught in catch block and logged
       await expect(driverManager.initialize()).resolves.toBeUndefined();
     });
   });
@@ -221,7 +221,7 @@ describe('DriverManager', () => {
       await driverManager.initialize();
     });
 
-    it('harus filter tool berdasarkan allowedDrivers', async () => {
+    it('should filter tools based on allowedDrivers', async () => {
       const toolsD1 = await driverManager.getToolsList(['d1']);
       expect(toolsD1).toHaveLength(1);
       expect(toolsD1[0].name).toBe('d1_toolA');
@@ -234,7 +234,7 @@ describe('DriverManager', () => {
       expect(noTools).toHaveLength(0);
     });
 
-    it('harus mengembalikan undefined untuk tool yang tidak dikenal', () => {
+    it('should return undefined for unknown tools', () => {
       expect(driverManager.getDriverNameForTool('unknown_tool')).toBeUndefined();
     });
   });
@@ -261,17 +261,17 @@ describe('DriverManager', () => {
       await driverManager.initialize();
     });
 
-    it('harus melempar error jika tool tidak terdaftar', async () => {
+    it('should throw error if tool is not registered', async () => {
       await expect(driverManager.callTool('invalid_tool', {})).rejects.toThrow(/is not registered by any active driver/);
     });
 
-    it('harus memanggil callTool pada driver dengan nama asli tool (tanpa prefix)', async () => {
+    it('should invoke callTool on driver with original tool name (without prefix)', async () => {
       const result = await driverManager.callTool('mockD_myTool', { key: 'val' });
       expect(result).toEqual({ success: true });
       expect(mockCallTool).toHaveBeenCalledWith('myTool', { key: 'val' });
     });
 
-    it('harus melempar error jika driver dihapus setelah inisialisasi', async () => {
+    it('should throw error if driver is deleted after initialization', async () => {
       // simulate race condition / bug
       (driverManager as any).drivers.delete('mockD');
       await expect(driverManager.callTool('mockD_myTool', {})).rejects.toThrow(/Driver mockD is not active/);
@@ -279,7 +279,7 @@ describe('DriverManager', () => {
   });
 
   describe('shutdown', () => {
-    it('harus memanggil shutdown di semua active drivers', async () => {
+    it('should call shutdown on all active drivers', async () => {
       const mockShutdown1 = vi.fn().mockResolvedValue(undefined);
       const mockShutdown2 = vi.fn().mockRejectedValue(new Error('Shutdown error'));
       

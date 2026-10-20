@@ -160,7 +160,7 @@ const handleToolsCall = async (
       budgetManager.recordUsage(userEmail, metadata.actualBytesBilled);
     }
 
-    // Asumsi bahwa driver mengembalikan objek native JS/TS, kita format sebagai JSON string jika bukan string.
+    // Assume the driver returns a native JS/TS object; format as JSON string if not already a string.
     const formattedResult = typeof result === 'string' ? result : JSON.stringify(result, null, 2);
 
     writeAuditLog({

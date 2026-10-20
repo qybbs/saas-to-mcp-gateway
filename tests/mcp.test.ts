@@ -12,7 +12,7 @@ describe('validateQuerySafety', () => {
     // Clean up if necessary
   });
 
-  it('harus mengizinkan query SELECT sederhana pada tabel yang terdaftar', () => {
+  it('should allow simple SELECT query on allowlisted table', () => {
     const sql = 'SELECT * FROM `my_dataset.my_table` LIMIT 10';
     const result = validateQuerySafety(sql);
     
@@ -20,7 +20,7 @@ describe('validateQuerySafety', () => {
     expect(result.detectedTables).toContain('my_dataset.my_table');
   });
 
-  it('harus mengizinkan query dengan klausa WITH (Common Table Expressions)', () => {
+  it('should allow queries with WITH clause (Common Table Expressions)', () => {
     const sql = 'WITH cte AS (SELECT * FROM `my_dataset.my_table`) SELECT * FROM cte';
     const result = validateQuerySafety(sql);
     
@@ -28,7 +28,7 @@ describe('validateQuerySafety', () => {
     expect(result.detectedTables).toContain('my_dataset.my_table');
   });
 
-  it('harus mendeteksi tabel dengan project ID', () => {
+  it('should detect table with project ID', () => {
     const sql = 'SELECT * FROM `my_project.my_dataset.my_table`';
     const result = validateQuerySafety(sql);
     
@@ -37,36 +37,36 @@ describe('validateQuerySafety', () => {
     expect(result.detectedTables).toContain('my_dataset.my_table');
   });
 
-  it('harus menolak query non-SELECT (contoh: DELETE)', () => {
+  it('should reject non-SELECT queries (e.g. DELETE)', () => {
     const sql = 'DELETE FROM `my_dataset.my_table` WHERE id = 1';
     const result = validateQuerySafety(sql);
     
     expect(result.safe).toBe(false);
-    expect(result.reason).toContain('Hanya query SELECT');
+    expect(result.reason).toContain('Only SELECT');
   });
 
-  it('harus menolak tabel yang tidak terdaftar dalam allowlist', () => {
+  it('should reject tables that are not in the allowlist', () => {
     const sql = 'SELECT * FROM `my_dataset.secret_table`';
     const result = validateQuerySafety(sql);
     
     expect(result.safe).toBe(false);
-    expect(result.reason).toContain('tidak terdaftar dalam allowlist');
+    expect(result.reason).toContain('is not in the allowlist');
   });
 
-  it('harus menolak query yang mengandung keyword terlarang', () => {
+  it('should reject queries containing forbidden keywords', () => {
     const sql = 'SELECT * FROM `my_dataset.my_table`; DROP TABLE `my_dataset.my_table`;';
     const result = validateQuerySafety(sql);
     
     expect(result.safe).toBe(false);
-    expect(result.reason).toContain('keyword terlarang: "drop"');
+    expect(result.reason).toContain('forbidden keyword: "drop"');
   });
 
-  it('harus membersihkan komentar sehingga tabel/keyword tetap terdeteksi dengan benar', () => {
+  it('should strip comments so tables/keywords are accurately detected', () => {
     const sql = `
-      -- ini komentar palsu
+      -- fake comment
       SELECT * 
       FROM \`my_dataset.my_table\`
-      /* komentar drop table */
+      /* comment drop table */
     `;
     const result = validateQuerySafety(sql);
     
@@ -74,11 +74,11 @@ describe('validateQuerySafety', () => {
     expect(result.detectedTables).toContain('my_dataset.my_table');
   });
 
-  it('harus menggagalkan query yang menyisipkan keyword terlarang setelah komentar inline', () => {
-    const sql = 'SELECT * FROM `my_dataset.my_table` -- komentar \n DROP TABLE `my_dataset.my_table`';
+  it('should fail queries that insert forbidden keywords after an inline comment', () => {
+    const sql = 'SELECT * FROM `my_dataset.my_table` -- comment \n DROP TABLE `my_dataset.my_table`';
     const result = validateQuerySafety(sql);
     
     expect(result.safe).toBe(false);
-    expect(result.reason).toContain('keyword terlarang: "drop"');
+    expect(result.reason).toContain('forbidden keyword: "drop"');
   });
 });

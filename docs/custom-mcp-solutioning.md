@@ -1,54 +1,54 @@
-# Detail Arsitektur Opsi 2 — Enterprise SaaS-to-MCP Gateway untuk SERSAN Agent
+# Detailed Architecture: Enterprise SaaS-to-MCP Gateway for AI Agents
 
-Dokumen ini merinci rancangan teknis untuk **Opsi 2**: **Enterprise SaaS-to-MCP Gateway** yang dideploy ke Cloud Run agar SERSAN Agent dapat mengeksekusi query BigQuery secara aman, terukur, dan dapat diaudit.
+This document details the technical design for the **Enterprise SaaS-to-MCP Gateway** deployed to Cloud Run, enabling AI Agents (such as Atlassian Rovo) to execute BigQuery queries safely, measurably, and with full auditability.
 
-**Tujuan keputusan**
-Menentukan seperti apa desain target Opsi 2 yang cukup aman untuk pilot, tetap ringan untuk dibangun, dan memberi ruang evolusi ke model audit serta identity yang lebih matang.
+**Decision Objective**  
+Define an enterprise target design that is secure for pilot validation, lightweight to build, and expandable toward mature audit and user identity attribution models.
 
-## Ringkasan rancangan
+## Design Summary
 
-Opsi 2 menempatkan satu layer kontrol milik Corporate di antara Rovo Agent dan BigQuery. Layer ini berfungsi sebagai **MCP Server**, sekaligus policy enforcement point untuk validasi query, pembatasan dataset, estimasi biaya, audit logging, dan kontrol output. Dibanding opsi managed, pendekatan ini memberi kontrol yang lebih kuat atas guardrail dan observability, dengan trade-off berupa effort build dan maintenance.
+The architecture places a corporate-governed control layer between the SaaS Agent (Rovo) and BigQuery. This layer acts as an **MCP Server** and a centralized policy enforcement point for query validation, dataset restrictions, cost estimation, audit logging, and output control. Compared to managed alternatives, this approach provides granular guardrails and observability with predictable build and maintenance effort.
 
-Untuk fase awal, rancangan yang paling realistis adalah memakai **shared service account + custom audit enrichment**. Artinya query tetap dijalankan oleh satu service account khusus SERSAN, tetapi setiap request dicatat dengan identitas user dari layer Rovo jika tersedia. Model ini lebih sederhana daripada impersonation, namun sudah cukup untuk pilot terbatas.
+For initial phases, the most realistic model employs a **shared service account with custom audit enrichment**. Queries execute via a designated service account, while every request records the originating user identity from the SaaS layer when available. This model avoids complex per-query impersonation while delivering complete traceability for enterprise governance.
 
-## Konteks dan sasaran desain
+## Context and Design Goals
 
-Dokumen solutioning sebelumnya merekomendasikan memulai dari Opsi 1 untuk validasi tercepat, lalu beralih ke Opsi 2 jika dibutuhkan custom guardrail, audit yang lebih kaya, atau jika integrasi auth pada endpoint Google managed tidak feasible. Draft ini mengasumsikan Opsi 2 dibutuhkan karena salah satu dari tiga alasan berikut:
+A custom gateway is required for the following technical and governance reasons:
 
-* Rovo Admin Hub tidak dapat terhubung langsung ke endpoint Google managed dengan auth yang kompatibel.
-* Guardrail bawaan belum cukup, terutama untuk `max_bytes_billed`, allowlist dataset, dan logging per user.
-* Dibutuhkan error handling dan UX yang lebih sesuai untuk user business Corporate.
+* SaaS Admin Hubs (e.g., Atlassian Rovo) require standard Streamable HTTP with OAuth 2.1 / DCR, which cannot connect directly to Google-managed endpoints without compatible authentication bridges.
+* Native BigQuery endpoints lack granular guardrails, specifically `max_bytes_billed` hard caps, dataset allowlists, and per-user attribution.
+* Enterprise business users require intuitive, actionable error feedback rather than raw database exceptions.
 
-Sasaran desain fase awal adalah:
+Initial design goals:
 
-* Hanya mendukung **read-only analytics**.
-* Hanya membuka **dataset yang sudah di-allowlist**.
-* Mewajibkan **estimasi cost** sebelum eksekusi.
-* Mengutamakan **hasil agregat**, bukan raw data customer.
-* Menyediakan **audit trail** yang cukup untuk monitoring dan investigasi.
+* Support **read-only analytics** strictly.
+* Expose only **allowlisted datasets**.
+* Mandate **cost estimation** prior to execution.
+* Prioritize **aggregated results** over raw customer records.
+* Maintain an immutable **audit trail** for observability and compliance.
 
-## Arsitektur target
+## Target Architecture
 
-Alur utama yang diusulkan:
+Proposed primary lifecycle:
 
-1. User mengirim pertanyaan ke SERSAN Agent di Rovo.
-2. SERSAN memutuskan perlu memanggil tool MCP.
-3. Rovo memanggil endpoint MCP Server Corporate yang dihosting di Cloud Run.
-4. MCP Server memvalidasi tool request, user context, query intent, dan policy.
-5. MCP Server menjalankan dry run ke BigQuery untuk estimasi bytes scanned.
-6. Jika lolos policy, MCP Server mengeksekusi query readonly ke BigQuery.
-7. Hasil dikembalikan ke SERSAN dalam bentuk terbatas dan aman.
-8. Log request, SQL, estimate, result metadata, dan outcome disimpan ke audit sink.
+1. A user submits a query to the SaaS Agent (e.g., in Rovo).
+2. The Agent determines an MCP tool call is required.
+3. Rovo calls the Gateway MCP Server endpoint hosted on Cloud Run.
+4. The MCP Server validates tool requests, user context, query intent, and security policies.
+5. The MCP Server executes a dry run against BigQuery to estimate scanned bytes.
+6. If approved by policy, the MCP Server executes the read-only query in BigQuery.
+7. Sanitized and capped results are returned to the Agent.
+8. Request logs, SQL text, estimates, result metadata, and outcomes are dispatched to audit sinks.
 
-### Diagram Arsitektur & Alur Data
+### Architecture & Data Flow Diagrams
 
-#### 1. Diagram Arsitektur Jaringan & Komponen
-Diagram berikut menggambarkan batas jaringan (network boundary), protokol, serta keterkaitan antar komponen GCP dan Atlassian Cloud.
+#### 1. Network Boundary & Component Architecture
+The following diagram illustrates network boundaries, protocols, and the interaction between GCP components and Atlassian Cloud.
 
 ```mermaid
 graph TD
     subgraph Atlassian Cloud
-        Rovo[SERSAN Agent in Rovo]
+        Rovo[Agent in Rovo]
     end
 
     subgraph Internet
@@ -86,467 +86,364 @@ graph TD
     MCPServer -->|6. Return Aggregated Data| Rovo
 ```
 
-#### 2. Sequence Diagram (Alur Interaksi Query)
-Diagram ini menjelaskan interaksi sekuensial dua tahap (estimate -> execute) antara Rovo Agent, Custom MCP Server, dan BigQuery.
+#### 2. Sequence Diagram (Query Interaction Lifecycle)
+This diagram illustrates the two-stage execution lifecycle (estimate -> execute) between the Agent, Custom MCP Server, and BigQuery.
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as Business User
-    participant Rovo as SERSAN Agent (Rovo)
+    participant Rovo as Agent (Rovo)
     participant MCP as MCP Server (Cloud Run)
     participant BQ as BigQuery
 
-    User->>Rovo: Tanya: "Berapa total transaksi QRIS minggu lalu?"
-    Note over Rovo: Agent mencocokkan skema tabel <br> & menyusun draft SELECT query
+    User->>Rovo: Query: "What was total QRIS transaction volume last week?"
+    Note over Rovo: Agent matches table schema <br> & drafts SELECT query
     Rovo->>MCP: Call Tool: estimate_query_cost(sql_query)
-    Note over MCP: Validasi Policy:<br>- Hanya statement SELECT<br>- Cek allowlist tabel<br>- Cek keyword terlarang
+    Note over MCP: Policy Validation:<br>- SELECT statements only<br>- Validate table allowlist<br>- Check forbidden keywords
     MCP->>BQ: Dry Run Query (dryRun=true)
     BQ-->>MCP: Return Bytes Scanned Estimate
-    Note over MCP: Cek cost limit:<br>Is bytes_scanned < limit?
+    Note over MCP: Cost verification:<br>Is bytes_scanned < limit?
     MCP-->>Rovo: Return Cost Estimate & Status (Approved / Denied)
     
     rect rgb(240, 248, 255)
-        Note over Rovo: Jika status Approved, Agent melanjutkan eksekusi
+        Note over Rovo: If Approved, Agent proceeds with execution
         Rovo->>MCP: Call Tool: execute_readonly_query(sql_query)
-        MCP->>BQ: Execute Query (dengan parameter maximumBytesBilled)
+        MCP->>BQ: Execute Query (with maximumBytesBilled parameter)
         BQ-->>MCP: Return Query Results (Rows)
-        Note over MCP: Enforce row limit (max 1000 rows)<br>Log request & metadata ke Cloud Logging
+        Note over MCP: Enforce row limit (max 1000 rows)<br>Emit structured audit log to Cloud Logging
         MCP-->>Rovo: Return Aggregated Data
     end
     
-    Rovo->>User: Menampilkan rangkuman jawaban & info biaya query
+    Rovo->>User: Display synthesized response & query cost summary
 ```
 
-### Komponen
+### Components
 
-| Komponen | Peran | Catatan desain |
+| Component | Role | Architectural Notes |
 | --- | --- | --- |
-| SERSAN Agent di Rovo | Antarmuka user dan reasoning layer | Menyusun intent, klarifikasi, dan memanggil tool MCP sesuai instruction. |
-| External MCP Server di Cloud Run | Policy enforcement dan tool execution layer | Komponen inti Opsi 2; memegang validasi query, audit, dan integrasi BigQuery. |
-| BigQuery | Execution engine dan metadata source | Hanya readonly; akses dibatasi pada dataset yang diizinkan. |
-| Cloud Logging / BigQuery Audit Table | Observability dan audit trail | Menyimpan event per request, termasuk estimate dan execution outcome. |
+| SaaS Agent in Rovo | User interface and reasoning layer | Synthesizes intent, requests clarifications, and calls MCP tools per instructions. |
+| External MCP Server on Cloud Run | Policy enforcement and tool execution layer | Core gateway engine; manages query validation, authentication, and BigQuery integration. |
+| BigQuery | Execution engine and metadata store | Read-only; access is strictly scoped to allowlisted datasets. |
+| Cloud Logging / BigQuery Audit Table | Observability and audit trail | Retains per-request events, cost estimates, and execution outcomes. |
 
-## Forecasting Cost
+## Cost Forecasting
 
-### Komponen Biaya
+### Cost Components
 
-| Komponen | Satuan Harga | Keterangan |
+| Component | Pricing Unit | Notes |
 | --- | --- | --- |
-| **Cloud Run — CPU** | $0.000024 / vCPU-second | Free tier: 180k vCPU-sec/bulan |
-| **Cloud Run — Memory** | $0.0000025 / GiB-second | Free tier: 360k GiB-sec/bulan |
-| **Cloud Run — Request** | $0.40 / juta request | Free tier: 2 juta request/bulan |
-| **BigQuery — On-demand** | $6.25 / TB data scanned | Free tier: 1 TB/bulan |
-| **Secret Manager** | $0.06 / 10k access | Untuk credential service account |
-| **Cloud Logging** | $0.50 / GiB setelah 50 GiB free | Audit log custom |
+| **Cloud Run — CPU** | $0.000024 / vCPU-second | Free tier: 180,000 vCPU-sec/month |
+| **Cloud Run — Memory** | $0.0000025 / GiB-second | Free tier: 360,000 GiB-sec/month |
+| **Cloud Run — Requests** | $0.40 / million requests | Free tier: 2 million requests/month |
+| **BigQuery — On-demand** | $6.25 / TB scanned | Free tier: 1 TB/month |
+| **Secret Manager** | $0.06 / 10k operations | Service account & OAuth credentials |
+| **Cloud Logging** | $0.50 / GiB beyond 50 GiB | Custom structured audit logs |
 
-### Asumsi Dasar
+### Baseline Assumptions
 
-| Parameter | Nilai |
+| Parameter | Value |
 | --- | --- |
 | Cloud Run allocation | 1 vCPU, 512 MiB memory |
-| Rata-rata durasi per request | ~3 detik, termasuk BigQuery execution |
-| Rata-rata data scan per query | ~200 MB, asumsi query agregat, partitioned, dan filtered |
-| Minimum instance | 0, scale-to-zero, tanpa always-on |
-| Query type | Read-only aggregation, seperti COUNT, SUM, AVG, GROUP BY |
-| Dataset | Partitioned by date dan clustered |
+| Average duration per request | ~3 seconds, including BigQuery execution |
+| Average data scanned per query | ~200 MB (assuming aggregated, partitioned, and filtered queries) |
+| Minimum instances | 0 (scale-to-zero, serverless) |
+| Query types | Read-only aggregation (COUNT, SUM, AVG, GROUP BY) |
+| Datasets | Date-partitioned and clustered |
 
-### Skenario Biaya Bulanan
+### Monthly Cost Scenarios
 
-* **Skenario 1 — PoC (3-5 user, ~1.000 query/bulan)**
+* **Scenario 1 — PoC (3–5 users, ~1,000 queries/month)**
 
-| Komponen | Perhitungan | Biaya |
+| Component | Calculation | Cost |
 | --- | --- | --- |
-| Cloud Run | 3.000 vCPU-sec + 1.500 GiB-sec + 1k request → semua di bawah free tier | ~$0 |
-| BigQuery | 1.000 × 200 MB = 200 GB → di bawah 1 TB free tier | ~$0 |
-| Supporting services | Secret Manager + Logging minimal | ~$1 |
-| **Total PoC** | | **~$1/bulan** |
+| Cloud Run | 3,000 vCPU-sec + 1,500 GiB-sec + 1k requests → within free tier | ~$0 |
+| BigQuery | 1,000 × 200 MB = 200 GB → within 1 TB free tier | ~$0 |
+| Supporting services | Secret Manager + minimal Logging | ~$1 |
+| **Total PoC** | | **~$1/month** |
 
-* **Skenario 2 — Pilot (10-20 user, ~5.000 query/bulan)**
+* **Scenario 2 — Pilot (10–20 users, ~5,000 queries/month)**
 
-| Komponen | Perhitungan | Biaya |
+| Component | Calculation | Cost |
 | --- | --- | --- |
-| Cloud Run | 15.000 vCPU-sec + 7.500 GiB-sec + 5k request → masih di bawah free tier | ~$0 |
-| BigQuery | 5.000 × 200 MB = 1 TB → mendekati batas free tier | ~$0 – $3 |
+| Cloud Run | 15,000 vCPU-sec + 7,500 GiB-sec + 5k requests → within free tier | ~$0 |
+| BigQuery | 5,000 × 200 MB = 1 TB → near free tier boundary | ~$0 – $3 |
 | Supporting services | Secret Manager + Logging | ~$3 – $5 |
-| **Total Pilot** | | **~$3 – $8/bulan** |
+| **Total Pilot** | | **~$3 – $8/month** |
 
-* **Skenario 3 — Production (50-100 user, ~15.000 query/bulan)**
+* **Scenario 3 — Production (50–100 users, ~15,000 queries/month)**
 
-| Komponen | Perhitungan | Biaya |
+| Component | Calculation | Cost |
 | --- | --- | --- |
-| Cloud Run (scale-to-zero) | 45.000 vCPU-sec → masih di bawah free tier | ~$0 |
-| Cloud Run (min 1 instance, untuk avoid cold start) | ~2.6M vCPU-sec billed + memory | ~$65 – $70 |
-| BigQuery | 15.000 × 200 MB = 3 TB → 2 TB charged × $6.25 | ~$12.50 |
-| BigQuery, jika rata-rata scan lebih besar ~500 MB | 7.5 TB → 6.5 TB × $6.25 | ~$40.63 |
+| Cloud Run (scale-to-zero) | 45,000 vCPU-sec → within free tier | ~$0 |
+| Cloud Run (min 1 instance, eliminating cold starts) | ~2.6M vCPU-sec billed + memory | ~$65 – $70 |
+| BigQuery | 15,000 × 200 MB = 3 TB → 2 TB charged × $6.25 | ~$12.50 |
+| BigQuery (larger average scan ~500 MB) | 7.5 TB → 6.5 TB × $6.25 | ~$40.63 |
 | Supporting services | Logging + Secret Manager + monitoring | ~$10 – $15 |
-| **Total Production (scale-to-zero)** | | **~$23 – $56/bulan** |
-| **Total Production (min 1 instance)** | | **~$88 – $126/bulan** |
+| **Total Production (scale-to-zero)** | | **~$23 – $56/month** |
+| **Total Production (min 1 instance)** | | **~$88 – $126/month** |
 
-### Skenario Worst Case — Tanpa Guardrail
+### Worst-Case Scenario — Without Guardrails
 
-| Kondisi | Perhitungan | Biaya |
+| Condition | Calculation | Cost |
 | --- | --- | --- |
-| Full table scan tanpa partition filter, rata-rata 5 GB/query | 15.000 × 5 GB = 75 TB → 74 TB × $6.25 | **~$463/bulan** |
-| **Dengan guardrail** `max_bytes_billed = 1 GB` | Capped: 15 TB max → 14 TB × $6.25 | **~$88/bulan** |
+| Full table scans without partition filters, average 5 GB/query | 15,000 × 5 GB = 75 TB → 74 TB × $6.25 | **~$463/month** |
+| **With guardrail** `max_bytes_billed = 1 GB` | Capped: 15 TB max → 14 TB × $6.25 | **~$88/month** |
 
-### Ringkasan & Insight
+### Insights & Summary
 
-| Aspek | Insight |
+| Aspect | Insight |
 | --- | --- |
-| **PoC sangat murah** | Pada volume PoC ≤1000 query, hampir semua biaya ditanggung free tier. Cost efektif sekitar $0-1/bulan. |
-| **BigQuery dominan** | Di semua skenario, biaya BigQuery query scan jauh lebih besar dari biaya Cloud Run compute. Optimasi utama ada di sisi query efficiency: partition filter dan column selection. |
-| **Cold start vs cost** | Tanpa minimum instance: gratis tetapi cold start sekitar 2-5 detik. Dengan min 1 instance: sekitar $65-70/bulan tetapi response time konsisten. Rekomendasi: mulai tanpa min instance untuk PoC/Pilot. |
-| **Guardrail `max_bytes_billed` krusial** | Satu parameter ini bisa membatasi worst case dari ~$463 menjadi ~$88/bulan. Wajib diterapkan sejak awal. |
-| **Biaya development (one-time)** | Estimasi effort: ~2-3 minggu engineer untuk build, deploy, test, dan hardening. Bukan biaya cloud, tetapi perlu diperhitungkan sebagai investment. |
+| **PoC is negligible** | At PoC volumes (≤1,000 queries), almost all costs are absorbed by GCP free tiers ($0–$1/month). |
+| **BigQuery is dominant** | Query scanning costs vastly outweigh compute costs. Optimization must focus on partition filtering and column projection. |
+| **Cold start vs. cost** | Scale-to-zero is cost-free when idle with 2–5s cold start. 1 warm instance costs ~$65–$70/month for consistent latency. Recommendation: use scale-to-zero for PoC/Pilot. |
+| **`max_bytes_billed` is critical** | This single parameter caps worst-case cost exposure from ~$463 down to ~$88/month. Mandatory from Day 1. |
 
-* **Perbandingan Cost: Opsi 1 vs Opsi 2**
+* **Cost Comparison: Option 1 vs. Option 2**
 
-| Aspek | Opsi 1 (Google Managed) | Opsi 2 (Self-hosted Cloud Run) |
+| Aspect | Option 1 (Google Managed) | Option 2 (Self-hosted Gateway) |
 | --- | --- | --- |
-| Infra cost | $0, no server | $0 – $70/bulan, tergantung minimum instance |
-| BigQuery cost | Sama — on-demand $6.25/TB | Sama — on-demand $6.25/TB |
-| Cost control | Terbatas, IAM + built-in limit | Penuh: `max_bytes_billed` dan custom cap per user |
-| Worst case protection | Lemah, tidak ada hard cap per query | Kuat, hard cap per query + per user |
-| Development cost | ~hari | ~2-3 minggu |
-| Ongoing maintenance | $0 | ~2-4 jam/bulan untuk monitoring dan patching |
+| Infrastructure cost | $0 (serverless) | $0 – $70/month (depending on min instances) |
+| BigQuery cost | Identical ($6.25/TB on-demand) | Identical ($6.25/TB on-demand) |
+| Cost governance | Limited (IAM limits only) | Full (`max_bytes_billed` + daily user quotas) |
+| Worst-case protection | Low (no per-query hard cap) | High (hard caps per query and per user) |
+| Development effort | ~Days | ~2–3 weeks |
+| Maintenance overhead | $0 | ~2–4 hours/month for updates |
 
-## Keputusan desain yang direkomendasikan
+## Architectural Recommendations
 
-* Deploy MCP Server sebagai service di Cloud Run dengan scale-to-zero untuk fase PoC/pilot.
-* Gunakan shared service account khusus SERSAN untuk eksekusi query pada fase awal.
-* Tambahkan custom audit enrichment di layer MCP Server agar setiap request dapat dikaitkan ke user peminta.
-* Batasi tool execution ke query SELECT saja, dengan dry run wajib dan `max_bytes_billed` enforced.
+* Deploy the MCP Server to Cloud Run with scale-to-zero enabled for PoC/pilot phases.
+* Use a designated shared Service Account for query execution during initial phases.
+* Embed custom audit enrichment in the Gateway layer to associate every request with the originating user identity.
+* Restrict execution strictly to `SELECT` queries with mandatory dry runs and hard-coded `max_bytes_billed`.
 
-## Desain komponen aplikasi
+## Application Component Design
 
-### 1. MCP transport layer
+### 1. MCP Transport Layer
 
-Sesuai dengan [syarat integrasi Atlassian](https://support.atlassian.com/organization-administration/docs/add-an-external-mcp-server-from-atlassian-administration/), server harus mengekspos endpoint MCP berbasis **Streamable HTTP transport** yang kompatibel dengan integrasi external MCP di Rovo. 
-* **Transport Requirement**: Atlassian Cloud **TIDAK MENDUKUNG** SSE-only (Server-Sent Events saja) atau `stdio` (standard input/output). Server harus mengimplementasikan Streamable HTTP transport (menggunakan request/response HTTP standard via POST).
-* **Network & Ingress**: Karena runtime Rovo berada di cloud Atlassian, endpoint harus dapat diakses secara publik menggunakan HTTPS dengan sertifikat TLS yang valid (disediakan secara native oleh Cloud Run).
+In accordance with [Atlassian integration requirements](https://support.atlassian.com/organization-administration/docs/add-an-external-mcp-server-from-atlassian-administration/), the server must expose an MCP endpoint over **Streamable HTTP transport**.
+* **Transport Requirement**: Atlassian Cloud **DOES NOT SUPPORT** SSE-only (Server-Sent Events only) or `stdio` (standard I/O). The server must implement Streamable HTTP (standard HTTP POST request/response).
+* **Network & Ingress**: Because the SaaS runtime resides in the cloud, endpoints must be publicly accessible via HTTPS with valid TLS certificates (managed natively by Cloud Run).
 
-### 2. Tool handler layer
+### 2. Tool Handler Layer
 
-Layer ini memetakan interface tool MCP (JSON schema yang dibaca oleh Rovo Agent) ke fungsi internal server. Dibandingkan langsung mengekspos low-level tools bawaan Google MCP Toolbox (seperti `bigquery-execute-sql` atau `bigquery-list-dataset-ids` yang terlalu bebas), rancangan ini merekomendasikan **kontrak tool kustom** untuk membatasi ruang gerak Agent secara eksplisit dan aman.
-
-Pemisahan tools di bawah ini didesain agar Agent mengikuti alur interaksi yang sehat: **Metadata ➔ Estimate ➔ Execute**.
+This layer maps MCP JSON schemas into internal server logic. Rather than exposing generic, unrestricted tools, the gateway implements a **specialized, constrained tool contract** designed around the lifecycle: **Discovery ➔ Schema ➔ Cost Estimation ➔ Execution**.
 
 *   `list_allowed_tables`
-    *   **Deskripsi**: Mengembalikan daftar nama tabel, dataset, beserta deskripsi singkatnya yang telah masuk ke dalam allowlist SERSAN.
-    *   **Perilaku Teknis**: Mengisolasi Agent agar tidak dapat melihat atau menebak skema tabel sensitif di luar ruang lingkup pilot.
-    *   **Under the hood**: Membaca konfigurasi allowlist statis dari Secret Manager atau environment variables.
+    *   **Description**: Returns table names, dataset IDs, and descriptions approved on the gateway allowlist.
+    *   **Technical Behavior**: Isolates the Agent from discovering sensitive schemas outside the approved scope.
+    *   **Under the Hood**: Reads static allowlist configurations from environment variables or Secret Manager.
 *   `describe_table`
-    *   **Deskripsi**: Menerima nama tabel, lalu mengembalikan skema detail (nama kolom, tipe data, deskripsi kolom, dan flag sensitivitas data).
-    *   **Perilaku Teknis**: Membantu Agent menyusun sintaks SQL `SELECT` yang akurat dan terhindar dari pemanggilan kolom sensitif (seperti data pribadi/raw PI).
-    *   **Under the hood**: Menjalankan query metadata ke `INFORMATION_SCHEMA.COLUMNS` di BigQuery dengan hak akses read-only.
+    *   **Description**: Accepts a table name and returns column details (data types, descriptions, sensitivity tags).
+    *   **Technical Behavior**: Enables the Agent to craft precise SQL queries while avoiding sensitive personal data columns.
+    *   **Under the Hood**: Queries `INFORMATION_SCHEMA.COLUMNS` with read-only permissions.
 *   `estimate_query_cost`
-    *   **Deskripsi**: Menerima draft SQL query dari Agent, memvalidasinya di Policy Engine, lalu menjalankan dry-run untuk menghitung volume data yang akan dipindai (*bytes scanned*).
-    *   **Perilaku Teknis**: Mengembalikan hasil estimasi bytes scanned, perkiraan biaya (GCP billing), serta status kelayakan query (Approved / Rejected jika melampaui `max_bytes_billed`).
-    *   **Under the hood**: Memanggil API BigQuery dengan opsi `dryRun = true`. Hasil dry run tidak memakan biaya GCP sama sekali.
+    *   **Description**: Evaluates draft SQL queries through the Policy Engine and executes a BigQuery dry run to determine bytes scanned.
+    *   **Technical Behavior**: Returns bytes scanned, estimated billing cost, and approval status.
+    *   **Under the Hood**: Invokes BigQuery API with `dryRun = true` (which incurs zero GCP billing).
 *   `execute_readonly_query`
-    *   **Deskripsi**: Menerima SQL query final dan mengeksekusinya ke BigQuery untuk mengambil data hasil query.
-    *   **Perilaku Teknis**: Memotong baris data (*row capping*) maksimal 1000 baris untuk mencegah pengiriman payload berlebih ke Atlassian Rovo. Hanya memperbolehkan query yang telah melewati estimasi.
-    *   **Under the hood**: Mengirimkan query job ke BigQuery dengan parameter `maximumBytesBilled` terkonfigurasi keras (hard-coded) di level aplikasi sebagai *fail-safe* terakhir.
+    *   **Description**: Executes verified read-only SQL queries against BigQuery.
+    *   **Technical Behavior**: Caps output rows (e.g., maximum 1,000 rows) to prevent payload bloat.
+    *   **Under the Hood**: Submits query jobs with `maximumBytesBilled` enforced at the database layer as a fail-safe.
 
 > [!TIP]
-> **Pemisahan Logika:** Pemisahan ini mencegah Agent bertindak impulsif. Jika Agent langsung memanggil `execute_readonly_query` tanpa `estimate_query_cost` terlebih dahulu, sistem MCP Server dapat memprogram penolakan otomatis (reject) untuk memaksa Agent melakukan estimasi cost kepada user terlebih dahulu.
+> **Separation of Concerns:** This separation prevents impulsive agent behavior. If an Agent attempts to call `execute_readonly_query` directly without prior estimation, the Gateway can reject the request to enforce user cost transparency.
 
-Jika tim memutuskan menggunakan basis **Google MCP Toolbox (mcp-toolbox)**, tools kustom di atas dapat dibuat sebagai *custom endpoints/middleware* yang membungkus SDK Google secara internal (Hybrid Approach).
+### 3. Policy Engine
 
-### 3. Policy engine
+All incoming SQL queries must pass through the following validations prior to execution:
 
-Semua request query harus melewati pemeriksaan berikut sebelum dieksekusi:
-
-* Hanya statement `SELECT`.
-* Blok keyword seperti `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `DROP`, `ALTER`, scripting, dan multi-statement.
-* Dataset dan tabel harus masuk allowlist.
-* Kolom sensitif harus diblok via kombinasi column-level security dan denylist tambahan.
-* Harus lolos dry run.
-* Bytes scanned harus di bawah batas yang ditetapkan.
-* Row limit output harus dipotong ke batas aman.
+* Must be a `SELECT` statement (or `WITH ... SELECT`).
+* Block forbidden keywords: `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `CREATE`, `DROP`, `ALTER`, scripting, and multi-statements.
+* Datasets and tables must exist in the allowlist.
+* Sensitive fields must be blocked via column-level security and explicit denylists.
+* Must pass dry-run verification.
+* Projected bytes scanned must fall below configured thresholds.
+* Row limits must be enforced on result sets.
 
 > [!NOTE]  
-> Validasi query tidak boleh hanya berbasis pencarian keyword sederhana. Minimal perlu parser atau normalisasi query yang cukup untuk mendeteksi multi-statement, comment abuse, dan query rewriting yang mencoba melewati blokir dasar.
+> Query validation must not rely merely on substring matching. It requires AST-aware tokenization or normalization to detect multi-statement attacks, comment evasion, and dialect-specific bypasses.
 
-### 4. BigQuery execution layer
+### 4. BigQuery Execution Layer
 
-Layer ini menggunakan service account khusus, misalnya `sersan-agent@...`, dengan permission seminimal mungkin. Untuk fase awal, kombinasi permission yang diinginkan adalah **job execution** dan **read access** hanya pada dataset allowlist. Hindari grant level project yang terlalu luas jika akses dataset-level sudah cukup.
+This layer executes queries using a dedicated runtime Service Account (e.g., `saas-mcp-agent@...`) configured with least privilege: **job execution** and **read access** scoped strictly to allowlisted datasets.
 
-Setiap eksekusi query sebaiknya menambahkan kontrol berikut:
+Execution safeguards:
 
-* `dryRun = true` untuk estimate lebih dulu.
-* `maximumBytesBilled` untuk hard cap biaya.
-* `timeoutMs` di level aplikasi.
-* `labels` untuk menandai job, misalnya `source=sersan_mcp`, `env=pilot`, dan user hash jika dibutuhkan.
+* `dryRun = true` for cost pre-checks.
+* `maximumBytesBilled` for hard cost boundaries.
+* Application-level `timeoutMs` (e.g., 15 seconds).
+* Job labels (`source=saas_mcp`, `env=production`, and normalized `user_email`).
 
-### 5. Audit and observability layer
+### 5. Audit and Observability Layer
 
-Audit minimum per request:
+Per-request audit payload:
 
-* timestamp request
-* request id
-* user identifier dari Rovo context jika tersedia
-* tool name
-* prompt ringkas atau prompt hash
-* generated SQL
-* dry run bytes estimate
-* dataset/table yang disentuh
-* execution status
-* error code atau denial reason
-* returned row count
+* Request timestamp
+* Request ID
+* User identity (email from OAuth context)
+* Tool name
+* Prompt summary or hash
+* Executed SQL text
+* Estimated dry-run bytes scanned
+* Target datasets and tables
+* Execution status
+* Denial reason or error code (if rejected)
+* Returned row count
+* BigQuery Job ID and actual bytes billed
 
-Untuk fase awal, log dapat dikirim ke Cloud Logging dan disinkronkan ke BigQuery audit table agar mudah dianalisis berkala.
+Audit logs are emitted as structured JSON to Cloud Logging and can be routed to a BigQuery audit dataset for reporting and FinOps reconciliation.
 
-## Opsi implementasi teknis
+## Technical Implementation Options
 
-| Opsi | Deskripsi | Kelebihan | Kekurangan |
+| Option | Description | Pros | Cons |
 | --- | --- | --- | --- |
-| Adopsi MCP Toolbox Google | Menggunakan basis open-source Google lalu menambah wrapper/policy layer | Mempercepat build, fondasi MCP sudah tersedia | Tetap perlu customisasi untuk policy, audit, dan UX error |
-| Build custom server ringan | Membangun MCP Server sendiri khusus untuk use case SERSAN | Kontrol penuh atas tool, policy, dan response format | Effort engineering lebih tinggi dan testing lebih banyak |
-| Hybrid | Gunakan toolbox untuk koneksi dasar, tambah middleware validasi internal | Balance antara speed dan control | Arsitektur sedikit lebih kompleks |
-| Proxy ke Managed MCP | Cloud Run bertindak sebagai reverse proxy ke Google Managed MCP (`https://bigquery.googleapis.com/mcp`) | Tidak perlu menulis kode integrasi BigQuery SDK | Harus membongkar-pasang JSON-RPC secara manual untuk memvalidasi dan mem-filter data |
+| Google MCP Toolbox | Use Google's open-source toolbox with a policy wrapper | Faster setup, pre-built BigQuery connectivity | Requires extensive customization for enterprise policy and custom UX |
+| Lightweight Custom Server | Purpose-built gateway tailored for SaaS agents | Total control over tools, policies, and response formats | Higher initial build effort |
+| Hybrid | Use core driver abstractions with internal policy middleware | Optimal balance between speed and control | Slightly higher architectural complexity |
+| Proxy to Managed MCP | Reverse proxy to Google Managed BigQuery MCP | Zero BigQuery SDK integration code | Requires deep JSON-RPC packet inspection and lacks native cost caps |
 
-**Rekomendasi implementasi:** mulai dari **hybrid** jika tim ingin time-to-pilot cepat namun tetap butuh guardrail kuat. Jika kebutuhan policy sangat spesifik atau ada banyak constraint pada format tool, custom server bisa lebih bersih dalam jangka menengah.
+**Recommendation:** Adopt the **Custom Gateway / Hybrid** approach to achieve strict cost caps, custom tool schemas, and zero data leakage.
 
-### Mengapa Tidak Memilih Opsi Proxy ke Google Managed BigQuery MCP?
+### Why Avoid Proxying to Google Managed BigQuery MCP?
 
-Meskipun secara teoritis kita bisa membuat Cloud Run bertindak sebagai "Gateway" untuk menyelaraskan autentikasi OAuth 2.1 Atlassian dengan Google Managed MCP, opsi ini tidak direkomendasikan karena alasan teknis berikut:
+1. **No Granular Cost Protection (`maximumBytesBilled`)**: The Google Managed MCP schema does not expose `maximumBytesBilled`. Without it, runaway queries cannot be blocked at the database level.
+2. **Double Network Round-Trip**: Enforcing dry-run estimates via a proxy requires intercepting the call, firing a dry-run query, evaluating the response, and then firing the execution query—doubling network latency.
+3. **JSON-RPC Inspection Overhead**: A proxy must unpack, parse, sanitize, and repack JSON-RPC payloads, creating high code complexity and security risks.
+4. **Rigid Tool Schemas**: Managed schemas cannot be customized into streamlined business contracts (e.g., separating `estimate_query_cost` from execution).
 
-1. **Ketiadaan Proteksi Biaya Granular (`maximumBytesBilled`)**:
-   Skema tool `execute_sql_readonly` pada Google Managed MCP tidak menyediakan parameter untuk membatasi `maximumBytesBilled` per query. Tanpa parameter ini, kita tidak bisa menolak query jumbo di tingkat database. Dengan Custom Server (SDK), kita bisa menyuntikkan `maximumBytesBilled` langsung pada konfigurasi query job BigQuery secara native (cukup 1 kali eksekusi atomic di sisi database).
-2. **Double Round-Trip untuk Enforce Guardrail**:
-   Jika ingin melakukan pengecekan biaya sebelum query jalan via proxy, Gateway terpaksa melakukan intercept request: menembakkan query dengan `dryRun: true` ke Managed MCP terlebih dahulu, membaca responsnya, memeriksa limitnya, lalu mengirim query kedua dengan `dryRun: false`. Proses ini membutuhkan 2 kali network round-trip ke GCP yang menambah latency eksekusi.
-3. **Kompleksitas Pembongkaran JSON-RPC**:
-   Gateway bertindak sebagai *smart proxy* yang harus membongkar payload request JSON-RPC untuk memvalidasi isi SQL, serta mem-filter payload response JSON-RPC (misal menyembunyikan dataset/tabel non-allowlist pada response `list_dataset_ids`). Menulis logika parser dan interceptor JSON-RPC ini justru memiliki kompleksitas dan risiko kebocoran data yang lebih tinggi dibanding menulis custom server biasa dengan SDK.
-4. **Keterbatasan Kustomisasi Kontrak Tool**:
-   Kita terkunci pada spesifikasi input/output bawaan Google Managed MCP (seperti `execute_sql_readonly`, `list_table_ids`). Kita tidak bisa membuat interface tool kustom yang lebih aman dan terstruktur seperti `estimate_query_cost` atau memodifikasi format response agar lebih ramah bagi model AI.
+## Security & Governance Guardrails
 
-## Kontrak tool yang disarankan
-
-Desain tool perlu dibuat sempit dan eksplisit. Contoh perilaku yang direkomendasikan:
-
-* **list_allowed_tables**: hanya menampilkan tabel dari domain yang diizinkan berikut deskripsi singkat.
-* **describe_table**: menampilkan schema, deskripsi kolom, dan flag sensitivitas jika ada.
-* **estimate_query_cost**: menerima SQL, mengembalikan valid/invalid, bytes estimate, dan alasan penolakan jika ada.
-* **execute_readonly_query**: hanya menerima SQL yang sudah lolos estimate atau memaksa dry run internal sebelum execute.
-
-> [!TIP]
-> **Saran UX:** Jika query ditolak, kembalikan alasan yang dapat ditindaklanjuti user, misalnya “Tambahkan filter tanggal” atau “Gunakan hasil agregat, bukan data individu”, bukan sekadar error teknis generik.
-
-## Keamanan dan guardrail minimum
-
-| Area | Kontrol yang direkomendasikan | Implementasi awal |
+| Domain | Recommended Control | Implementation |
 | --- | --- | --- |
-| Auth ke MCP Server | OAuth 2.1 dengan authorization_code grant + PKCE | Custom OAuth 2.1 Server / Gateway dengan Dynamic Client Registration (DCR) |
-| Network exposure | Endpoint public tetapi terlindungi | Cloud Run + pembatasan ingress + validasi auth ketat |
-| BigQuery access | Least privilege | Service account khusus, dataset-level reader, job user |
-| Query safety | Readonly only + dry run + hard cap | Parser check, `maximumBytesBilled`, timeout, row cap |
-| Data sensitivity | Aggregation-first | Column-level security + denylist + allowlist domain |
-| Observability | End-to-end audit | Cloud Logging + sink ke BigQuery audit table |
+| Gateway Authentication | OAuth 2.1 with Authorization Code + PKCE | Custom OAuth 2.1 Server with Dynamic Client Registration (RFC 7591) |
+| Ingress Security | Publicly accessible but strongly authenticated | Cloud Run + TLS 1.3 + strict token verification |
+| BigQuery Access | Principle of Least Privilege | Dedicated service account, dataset-level reader, jobUser |
+| Query Safety | Read-only enforcement + dry-run + cost caps | Lexical parser, `maximumBytesBilled`, execution timeouts |
+| Data Sensitivity | Aggregation-first principle | Column-level security + dataset allowlist |
+| Observability | Comprehensive audit trail | Structured Cloud Logging + BigQuery audit table sink |
 
-### Detail Spesifikasi Keamanan & Jaringan
+### Ingress & IAM Specifications
 
-Berdasarkan [syarat keamanan Atlassian external MCP](https://support.atlassian.com/organization-administration/docs/add-an-external-mcp-server-from-atlassian-administration/), tim Infra perlu memperhatikan spesifikasi detail berikut untuk mengimplementasikan arsitektur secara aman:
+#### 1. Ingress Security & Authentication
+* **HTTPS & TLS**: Enforce TLS 1.2/1.3 with managed custom domain certificates (e.g., `mcp.enterprise.com`).
+* **Dynamic Client Registration (DCR - RFC 7591)**: The gateway provides a `/register` endpoint allowing SaaS platforms (e.g., Atlassian) to register OAuth clients automatically.
+* **OAuth 2.1 & PKCE**: User authorization requires Authorization Code Grant with S256 PKCE challenges:
+  * `/oauth/authorize`: User authorization endpoint (federated with Corporate SSO / Entra ID).
+  * `/oauth/token`: Token exchange endpoint verifying PKCE verifiers.
+* **Bearer Token Validation**: Incoming MCP requests must include `Authorization: Bearer <TOKEN>`.
+* **Rate Limiting**: Configured sliding-window rate limiters per client/user to safeguard endpoints against denial-of-service.
 
-#### 1. Autentikasi dan Keamanan Ingress
-* **HTTPS & TLS**: Cloud Run dipaksa menggunakan HTTPS dengan TLS 1.2/1.3 dengan public domain terverifikasi (misal: `sersan-mcp.example.com`).
-* **Dynamic Client Registration (DCR - RFC 7591)**: MCP Server (atau Auth Gateway di depannya) harus menyediakan endpoint `/register` yang mendukung DCR. Atlassian menggunakan DCR untuk meregistrasi client OAuth secara otomatis tanpa setup manual di sisi administrator Corporate.
-* **OAuth 2.1 & PKCE**: Autentikasi user wajib menggunakan OAuth 2.1 dengan *Authorization Code Grant* plus PKCE (Proof Key for Code Exchange). MCP Server wajib menyediakan endpoint berikut:
-  * `/oauth/authorize`: Endpoint otorisasi untuk autentikasi user (dapat diintegrasikan ke SSO Microsoft Entra ID / Google Workspace Corporate).
-  * `/oauth/token`: Endpoint untuk penukaran auth code menjadi access token.
-* **Token-based Auth**: Setelah proses OAuth selesai, Rovo akan memanggil endpoint tool MCP `/mcp` (Streamable HTTP) dengan menyertakan header `Authorization: Bearer <ACCESS_TOKEN>`. MCP Server memvalidasi access token ini untuk mengizinkan request dan mengidentifikasi email user.
-* **Rate Limiting**: Dikonfigurasi di Cloud Run (max concurrent requests per container) untuk mencegah serangan DoS/DDoS pada endpoint publik.
+#### 2. IAM Least Privilege Matrix
+The runtime service account (`saas-mcp-agent@...`) requires the following granular roles:
 
-#### 2. Matriks IAM Permissions (Least Privilege)
-Service Account khusus `sersan-agent@prd-data-ap.iam.gserviceaccount.com` digunakan untuk runtime Cloud Run dengan spesifikasi hak akses sebagai berikut:
-
-| Resource | Role / Permission | Tujuan | Scope |
+| Resource | Role / Permission | Purpose | Scope |
 | --- | --- | --- | --- |
-| **GCP Project** | `roles/bigquery.jobUser` | Menjalankan dan mengelola query job di BigQuery | Project Level |
-| **BigQuery Dataset (Allowlist)** | `roles/bigquery.dataViewer` | Membaca data dan schema pada dataset yang diizinkan | Dataset Level (Granular) |
-| **GCP Project / Logging** | `roles/logging.logWriter` | Menulis log request dan audit log ke Cloud Logging | Project Level |
-| **Secret Manager** | `roles/secretmanager.secretAccessor` | Membaca client credentials / signing keys | Secret Level (Hanya credential Rovo) |
+| **GCP Project** | `roles/bigquery.jobUser` | Submit and manage query jobs | Project Level |
+| **BigQuery Dataset** | `roles/bigquery.dataViewer` | Read metadata and data in allowlisted datasets | Dataset Level |
+| **GCP Project / Logging** | `roles/logging.logWriter` | Write structured audit logs | Project Level |
+| **Secret Manager** | `roles/secretmanager.secretAccessor` | Access encryption keys and secrets | Secret Level |
 
 > [!WARNING]
-> **TIDAK BOLEH** memberikan role `roles/bigquery.admin` atau `roles/bigquery.dataEditor` pada service account ini karena dapat membuka celah manipulasi data atau pembacaan dataset sensitif di luar domain SERSAN.
+> Never grant `roles/bigquery.admin` or `roles/bigquery.dataEditor` to runtime service accounts.
 
-## Detail Alur Autentikasi OAuth 2.1 & DCR
+## OAuth 2.1 & DCR Authentication Lifecycle
 
-Untuk memenuhi spesifikasi eksternal MCP dari Atlassian, MCP Server harus bertindak sebagai **Authorization Server** yang mengelola pendaftaran client secara dinamis serta proses persetujuan otorisasi pengguna. Berikut rincian alur teknisnya:
-
-### 1. Peran Authorization Server
-* **MCP Server Terintegrasi (Self-contained)**: Karena integrasi pilot ini ditargetkan cepat dan ringan, komponen *Authorization Server* akan dibangun secara internal di dalam kode MCP Server (menggunakan *library* standar seperti `Authlib` di Python atau `oidc-provider` di Node.js).
-* **Alasan**: Menghindari modifikasi pada `corporate-ai-gateway` yang didesain murni sebagai proxy LLM, sehingga meminimalkan risiko pada layanan AI Gateway yang sudah berjalan (*production*).
-
-### 2. Alur Dynamic Client Registration (DCR - RFC 7591)
-Pendaftaran client OAuth terjadi secara otomatis ketika Administrator Atlassian mendaftarkan endpoint MCP Server:
+### 1. Dynamic Client Registration (DCR - RFC 7591)
+Client registration occurs automatically when the administrator configures the gateway in the SaaS management console:
 
 ```mermaid
 sequenceDiagram
     autonumber
     participant Atl as Atlassian Cloud
-    participant MCP as MCP Server (Cloud Run)
-    participant Sec as Secret Manager
+    participant MCP as Gateway (Cloud Run)
+    participant Sec as Secret Store / Repository
 
     Atl->>MCP: POST /register<br>(Client Metadata: name, redirect_uris, grant_types)
-    Note over MCP: Validasi metadata &<br>generate client_id & client_secret
-    MCP->>Sec: Simpan Client ID & Secret (untuk validasi nantinya)
-    MCP-->>Atl: Response: 201 Created<br>(client_id, client_secret, auth/token endpoints)
+    Note over MCP: Validate metadata &<br>generate client_id & client_secret
+    MCP->>Sec: Persist Client Credentials
+    MCP-->>Atl: Response: 201 Created<br>(client_id, client_secret, OAuth endpoints)
 ```
 
-1. **Atlassian Admin** memasukkan URL MCP Server di portal admin.
-2. Atlassian Cloud mengirimkan payload pendaftaran ke `POST /register` di MCP Server.
-3. MCP Server memproses pendaftaran, men-generate `client_id` dan `client_secret` kustom, lalu menyimpannya secara aman di **GCP Secret Manager**.
-4. MCP Server membalas dengan status `201 Created` beserta URL otorisasi (`/oauth/authorize`) dan token (`/oauth/token`).
-
-### 3. Alur Otorisasi & Validasi Kredensial User (OAuth 2.1 + PKCE)
-Autentikasi kredensial pengguna **TIDAK dilakukan** di level MCP Server, melainkan dialihkan (*federated*) ke **Microsoft Entra ID (SSO Corporate)**.
+### 2. User Authorization & SSO Federation (OAuth 2.1 + PKCE)
 
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Corporate Employee
-    participant Rovo as Atlassian Rovo
-    participant MCP as MCP Server
-    participant Entra as Microsoft Entra ID (SSO)
+    actor User as Employee
+    participant Rovo as SaaS Client (Rovo)
+    participant MCP as Gateway Server
+    participant SSO as Identity Provider (SSO)
 
-    User->>Rovo: Gunakan SERSAN Agent
-    Rovo->>User: Redirect ke MCP Server (/oauth/authorize + PKCE Challenge)
-    MCP->>User: Redirect ke Corporate SSO (Microsoft Entra ID login)
-    User->>Entra: Masukkan Kredensial Corporate (Email & Password)
-    Entra-->>MCP: Callback dengan ID Token & User Claims
-    Note over MCP: Validasi JWT Claims:<br>- Cek domain email (must @example.com)<br>- Ekstrak email & nama user
-    MCP-->>Rovo: Redirect kembali dengan Authorization Code
+    User->>Rovo: Interact with Agent
+    Rovo->>User: Redirect to Gateway (/oauth/authorize + PKCE Challenge)
+    MCP->>User: Redirect to Corporate SSO Login
+    User->>SSO: Authenticate with Enterprise Credentials
+    SSO-->>MCP: Callback with User Claims (ID Token)
+    Note over MCP: Validate Claims:<br>- Verify email domain (@example.com)<br>- Extract user identity
+    MCP-->>Rovo: Redirect with Authorization Code
     Rovo->>MCP: POST /oauth/token<br>(Auth Code + PKCE Verifier)
-    Note over MCP: Validasi PKCE Verifier vs Challenge
-    MCP-->>Rovo: Return JWT Access Token (email user ter-embed)
+    Note over MCP: Validate PKCE Challenge vs. Verifier
+    MCP-->>Rovo: Return JWT Access Token (user identity embedded)
 ```
 
-1. **User** memicu tool MCP di Rovo. Rovo mengarahkan *browser* user ke `/oauth/authorize` milik MCP Server beserta parameter PKCE (`code_challenge`).
-2. MCP Server mengalihkan (*redirect*) user ke halaman login **Microsoft Entra ID (SSO Corporate)**.
-3. User melakukan login menggunakan akun email internal Corporate.
-4. Setelah login berhasil, Microsoft mengirimkan klaim pengguna (ID Token) kembali ke MCP Server.
-5. MCP Server memverifikasi klaim (wajib memastikan email domain adalah `@example.com` / bagian dari internal Corporate), lalu mengembalikan *Authorization Code* ke Rovo.
-6. Rovo melakukan pertukaran kode dengan *Access Token* di `/oauth/token` dengan mengirimkan `code_verifier` (PKCE verification).
-7. MCP Server mengeluarkan *Access Token* berbasis JWT yang berisi identitas email user. Token ini digunakan untuk memanggil endpoint tools `/mcp` berikutnya.
-
-### 4. Implementasi Stateless Tanpa Database (Zero-Database Architecture)
-> [!NOTE]
-> **Pembaruan Fase 2**: Gateway saat ini mendukung arsitektur penyimpanan yang modular dan dapat dikonfigurasi melalui parameter `DCR_PERSISTENCE_MODE`. Selain mode default `STATELESS` (yang dijelaskan di bawah ini), Anda juga dapat menggunakan mode `MEMORY` (untuk local testing) atau `FIRESTORE` (untuk database terdistribusi Google Cloud Firestore).
-
-Untuk menjaga Cloud Run tetap *stateless* (memungkinkan *scale-to-zero* dan menghemat biaya infrastruktur/database) bila menggunakan mode `STATELESS`, MCP Server dirancang untuk **tidak membutuhkan database** penyimpanan sesi/client:
-
-* **Stateless Client ID**: Nilai `client_id` yang diterbitkan saat DCR bukanlah ID acak, melainkan token yang dienkripsi dan ditandatangani (*signed*) menggunakan **Master Secret Key** milik server. Token tersebut menyimpan metadata registrasi Atlassian tenant (nama tenant, redirect URIs terdaftar). Saat proses otorisasi, server mendekripsi `client_id` secara lokal untuk memvalidasi legitimasi client Atlassian tanpa perlu mencocokkannya ke database.
-* **Stateless Authorization Code**: Kode otorisasi yang dihasilkan pada `/oauth/authorize` berupa *short-lived encrypted JWT* (berlaku 5 menit) yang menyimpan data `client_id`, email user hasil SSO, dan `code_challenge` (PKCE). Saat pertukaran token di `/oauth/token`, server tinggal memverifikasi tanda tangan JWT, mendekripsi datanya, dan mencocokkan `code_challenge` dengan `code_verifier` yang dikirim Atlassian secara lokal.
-* **Satu Kunci Utama**: Hanya **1 kunci rahasia utama (Master Secret Key)** yang perlu disimpan statis di **GCP Secret Manager** untuk melayani seluruh user. Kunci ini digunakan untuk enkripsi/dekripsi Client ID dan Authorization Code serta penandatanganan Access Token JWT.
+### 3. Modular Persistence Architecture
+The Gateway supports three configurable storage modes via `DCR_PERSISTENCE_MODE`:
+* **`STATELESS`**: Pure zero-database mode using encrypted JSON Web Encryption (JWE) tokens for `client_id` and authorization codes, ideal for zero-cost serverless deployments.
+* **`MEMORY`**: Ephemeral in-memory map for local development and integration testing.
+* **`FIRESTORE`**: Distributed cloud persistence in Google Cloud Firestore for clustered enterprise deployments.
 
 ---
 
-## Testing Scenario Matrix
+## Verification & Testing Scenario Matrix
 
-Untuk memastikan keamanan dan fungsionalitas arsitektur, berikut adalah matriks skenario pengujian (*test cases*) yang wajib dilakukan sebelum rilis:
-
-| ID | Kategori | Skenario Pengujian | Input/Aksi | Hasil yang Diharapkan |
+| ID | Category | Test Scenario | Input / Action | Expected Outcome |
 | :--- | :--- | :--- | :--- | :--- |
-| **TC-01** | **DCR** | Registrasi Client Otomatis | POST ke `/register` dengan metadata valid | HTTP 201, menerima client_id dan endpoint OAuth. |
-| **TC-02** | **SSO** | Login Akun Corporate Valid | Otorisasi menggunakan email `@example.com` | Berhasil login, dialihkan kembali ke Rovo dengan Auth Code. |
-| **TC-03** | **SSO** | Login Akun Luar (Blocked Domain) | Otorisasi menggunakan email `@gmail.com` | Login diblokir oleh MCP Server (HTTP 403 / Access Denied). |
-| **TC-04** | **OAuth** | Validasi PKCE (Success) | POST ke `/oauth/token` dengan `code_verifier` yang cocok | HTTP 200, menerima JWT Access Token. |
-| **TC-05** | **OAuth** | Validasi PKCE (Fail - Replay Attack) | POST ke `/oauth/token` dengan `code_verifier` salah | HTTP 400 Bad Request (Invalid Grant). |
-| **TC-06** | **Auth Token** | Akses Tool Tanpa Token | GET/POST ke `/mcp` tanpa header Authorization | HTTP 401 Unauthorized. |
-| **TC-07** | **Auth Token** | Akses Tool dengan Token Expired | GET/POST ke `/mcp` dengan token kedaluwarsa | HTTP 401 Unauthorized. |
-| **TC-08** | **Policy** | Eksekusi Query SELECT Aman | Query SELECT agregasi pada tabel allowlist (biaya di bawah limit) | HTTP 200, hasil data agregat dikembalikan. |
-| **TC-09** | **Policy** | Pencegahan Eksekusi Query DDL/DML | Kirim query mengandung keyword `DROP TABLE` atau `DELETE` | Request ditolak di level Policy Engine (HTTP 400 / Policy Violation). |
-| **TC-10** | **Policy** | Proteksi Query Jumbo (Cost Exceeded) | Query tanpa filter tanggal pada tabel besar (> 1 GB scan) | Job dibatalkan secara native oleh BigQuery (HTTP 400 / Cost Limit Exceeded). |
-| **TC-11** | **Policy** | Pembatasan Dataset (Denylist) | Query tertuju pada dataset tabel sensitif (misal data gaji/HR) | Ditolak di tingkat Policy Engine sebelum menyentuh BigQuery. |
+| **TC-01** | **DCR** | Dynamic Client Registration | POST to `/register` with valid metadata | HTTP 201 Created, returns `client_id` and OAuth endpoints. |
+| **TC-02** | **SSO** | Valid Corporate Login | Authorize with `@example.com` email | Successful login, redirected with Authorization Code. |
+| **TC-03** | **SSO** | Blocked External Domain | Authorize with `@external.com` email | Access denied (HTTP 403 Forbidden). |
+| **TC-04** | **OAuth** | PKCE S256 Exchange (Success) | POST to `/oauth/token` with matching `code_verifier` | HTTP 200 OK, returns signed JWT Access Token. |
+| **TC-05** | **OAuth** | PKCE Verification Failure | POST to `/oauth/token` with invalid verifier | HTTP 400 Bad Request (`Invalid Grant`). |
+| **TC-06** | **Auth Token** | Missing Bearer Token | Request `/mcp` without `Authorization` header | HTTP 401 Unauthorized. |
+| **TC-07** | **Auth Token** | Expired Access Token | Request `/mcp` with expired JWT | HTTP 401 Unauthorized. |
+| **TC-08** | **Policy** | Valid `SELECT` Query | Aggregation query on allowlisted table below cost limits | HTTP 200 OK, returns formatted results. |
+| **TC-09** | **Policy** | DDL/DML Rejection | Query containing `DROP TABLE` or `DELETE` | Request rejected by Policy Engine (HTTP 400 / Policy Violation). |
+| **TC-10** | **Policy** | Large Query Cost Protection | Unfiltered scan exceeding `max_bytes_billed` | Job aborted natively by BigQuery / Policy Engine. |
+| **TC-11** | **Policy** | Non-Allowlisted Dataset | Query referencing unauthorized tables | Rejected at Policy layer before reaching database. |
 
 ---
 
-## Identity model fase awal
+## Identity & FinOps Attribution Model
 
-Untuk rancangan detail ini, model yang paling masuk akal adalah **shared service account + custom audit enrichment**. Ini berarti:
+The Gateway implements **User Identity Propagation (UIP)**:
+* BigQuery jobs execute using the Gateway's runtime Service Account.
+* The Gateway forwards a normalized `ToolContext` (`userEmail`, `adapterName`, `requestId`) to all drivers.
+* The BigQuery driver attaches GCP labels (`user_email`, `mcp_adapter`) to every job, enabling granular per-user cost tracking in Google Cloud Billing while using a shared Service Account.
+* Execution metadata (`jobId`, `actualBytesBilled`) is emitted in structured audit logs and tracked against daily user quotas.
 
-* BigQuery melihat eksekusi atas nama service account SERSAN.
-* MCP Server menyimpan konteks user asal request bila Rovo mengirimkannya.
-* Dashboard usage per user dibangun dari audit table internal, bukan native BigQuery per-email dashboard.
+## Risk Assessment & Mitigations
 
-Model ini cocok untuk pilot karena lebih sederhana. Jika nanti dibutuhkan native per-user attribution di BigQuery audit log, arsitektur dapat dievolusikan ke impersonation tanpa mengubah kontrak tool secara besar.
-
-## Risiko utama pada Opsi 2
-
-| Risiko | Dampak | Mitigasi rancangan |
+| Risk | Impact | Architectural Mitigation |
 | --- | --- | --- |
-| Query mahal lolos ke BigQuery | Cost overrun | Dry run wajib, hard cap bytes billed, wajib filter tanggal untuk tabel besar |
-| Endpoint MCP terekspos atau disalahgunakan | Abuse dan data leakage | Strong auth, secret rotation, rate limiting, audit dan alerting |
-| Raw data sensitif ikut keluar | Risiko compliance | Allowlist tabel aman, CLS, denylist field, aggregation-first response |
-| Monitoring user tidak akurat | Sulit investigasi | Simpan request id, user context, SQL, dan result metadata secara konsisten |
-| Kompleksitas maintenance bertambah | Beban operasional tim | Mulai dari scope kecil, tool sedikit, dan runbook operasional sederhana |
+| Runaway query costs in BigQuery | Budget overrun | Mandatory dry runs, hard-coded `max_bytes_billed`, and mandatory partition filtering |
+| Public endpoint exposure | Unauthorized access | Strong OAuth 2.1 + PKCE authentication, rate limiting, and structured audit logs |
+| Sensitive customer data leakage | Compliance violation | Table allowlists, column-level security, denylists, and aggregation-first outputs |
+| Incomplete user auditability | Audit failure | Systematic logging of `requestId`, user email, SQL text, and execution metrics |
+| Operational overhead | Maintenance strain | Modular driver architecture, declarative configuration, and containerized deployment |
 
-## Usulan tahapan implementasi
+## Infrastructure & Reference Patterns
 
-1. **Desain detail dan alignment** sampai 8/7/2026: finalisasi tool contract, allowlist dataset, dan model audit.
-2. **Build technical skeleton** sampai 8/21/2026: setup Cloud Run service, auth, health check, dan koneksi BigQuery.
-3. **Implement policy layer** sampai 8/28/2026: readonly enforcement, dry run, bytes cap, dan row cap.
-4. **Implement audit & observability** sampai 9/4/2026: structured logging, audit sink, dashboard awal.
-5. **Internal testing** sampai 9/11/2026: happy path, ambiguous prompt, forbidden access, expensive query, timeout.
-6. **Limited pilot** mulai 9/14/2026 untuk 3-5 user terbatas.
-
-## Infrastructure Reference
-
-Section ini mendokumentasikan referensi internal Corporate yang menjadi bukti preseden dan standar deployment Cloud Run yang dapat ditiru untuk SERSAN MCP Server.
-
-### Referensi utama: `corporate-ai-gateway`
-
-Repository [corporate-ai-gateway](https://github.com/corporate/corporate-ai-gateway) adalah satu-satunya service **non-Java production** di Corporate yang saat ini berjalan di **Google Cloud Run**. Service ini adalah LiteLLM proxy (Python-based) yang diakses sebagai AI Gateway di `llm.example.com`.
-
-File-file kunci yang dapat dijadikan referensi langsung:
-
-| File | Peran | Relevansi untuk MCP Server |
-| --- | --- | --- |
-| [`.github/workflows/deploy.yml`](https://github.com/corporate/corporate-ai-gateway/blob/master/.github/workflows/deploy.yml) | CI/CD pipeline via GitHub Actions | Template trigger, build, dan deploy ke Cloud Run |
-| [`cloudbuild.yaml`](https://github.com/corporate/corporate-ai-gateway/blob/master/cloudbuild.yaml) | Build image via Google Cloud Build | Pola multi-stage build dan push ke Artifact Registry (`asia-southeast1-docker.pkg.dev`) |
-| [`Dockerfile`](https://github.com/corporate/corporate-ai-gateway/blob/master/Dockerfile) | Container image definition | Referensi base image dan struktur container untuk Python service |
-
-### Pola deployment yang diadopsi
-
-Dari `corporate-ai-gateway`, pola berikut dapat langsung ditiru:
-
-* **Registry**: Artifact Registry di region `asia-southeast1`
-* **Build tool**: Google Cloud Build (bukan Docker build lokal)
-* **Deploy command**: `gcloud run deploy` dari GitHub Actions workflow
-* **Auth ke GCP**: Application Default Credentials (ADC) via runtime service account — tidak perlu `service-account.json` atau `GOOGLE_APPLICATION_CREDENTIALS`. Pola ini identik dengan yang dibutuhkan MCP Server untuk auth ke BigQuery.
-* **Secrets**: GitHub Secrets → di-inject sebagai environment variables saat deploy via `--env-vars-file`
-
-### Perbedaan konfigurasi yang harus disesuaikan
-
-| Parameter | `corporate-ai-gateway` | SERSAN MCP Server |
-| --- | --- | --- |
-| Auth endpoint | `--allow-unauthenticated` | `--allow-unauthenticated` + validasi OAuth 2.1 token di application layer |
-| Memory | 4Gi | 512Mi–1Gi (cukup untuk fase pilot) |
-| Min instances | 0 (scale to zero) | 0 untuk pilot, naik ke 1 jika latency cold start jadi masalah |
-| Max instances | 5 | 2–3 untuk pilot |
-| Runtime service account | Default compute SA dengan `roles/aiplatform.user` | SA khusus `sersan-agent@...` dengan `roles/bigquery.jobUser` + dataset-level reader |
-| Cloud SQL | Ada (untuk LiteLLM DB) | Tidak diperlukan di fase awal |
-
-## Next steps
-
-- [ ] Finalisasi keputusan apakah implementasi memakai custom build, toolbox, atau hybrid
-- [ ] Tentukan dataset allowlist dan field denylist untuk domain pilot pertama
-- [ ] Definisikan schema audit log dan lokasi penyimpanannya
-- [ ] Validasi konteks user apa saja yang benar-benar diteruskan oleh Rovo ke external MCP server
-- [ ] Susun instruction SERSAN Agent agar selalu menjalankan alur clarify → estimate → execute → summarize
-
-**Usulan arah**
-Untuk draft detail Opsi 2, arah yang paling seimbang adalah **Cloud Run + shared service account + custom audit enrichment + strict readonly policy**. Ini cukup aman dan realistis untuk pilot, sekaligus membuka jalan ke impersonation atau guardrail yang lebih canggih bila use case terbukti bernilai.
+The gateway follows established enterprise deployment patterns:
+* **Registry**: Google Artifact Registry (`asia-southeast1-docker.pkg.dev`).
+* **Build Tool**: Google Cloud Build or automated GitHub Actions workflows.
+* **Deployment Target**: Google Cloud Run with Application Default Credentials (ADC).
+* **Secrets Management**: GCP Secret Manager for encryption keys and API tokens.
 
 ## References
 
 * [Atlassian Admin: Add an external MCP server from Atlassian Administration](https://support.atlassian.com/organization-administration/docs/add-an-external-mcp-server-from-atlassian-administration/)
-* [Solutioning SERSAN Agent Query Execution via MCP](https://corporate.atlassian.net/wiki/spaces/PD/pages/4398809864)
 * [Atlassian Admin: Configure tools for an external MCP server](https://support.atlassian.com/organization-administration/docs/configure-tools-for-an-external-mcp-server/)
 * [Atlassian Rovo MCP overview](https://support.atlassian.com/rovo/docs/rovo-dev-and-model-context-protocol-mcp/)
-* [Atlassian Rovo MCP monitoring](https://support.atlassian.com/security-and-access-policies/docs/monitor-atlassian-rovo-mcp-server-activity/)
-* [Tutorial: MCP Toolbox for Databases - Exposing BigQuery Datasets](https://medium.com/google-cloud/tutorial-mcp-toolbox-for-databases-exposing-big-query-datasets-9321f0064f4e)
-* [Running an MCP Server for BigQuery: Connect Your Data Warehouse to AI Agents](https://www.pondhouse-data.com/blog/mcp-server-bigquery)
+* [Model Context Protocol Specification](https://modelcontextprotocol.io/)
+* [Google Cloud Run: Connect to Cloud SQL and BigQuery](https://cloud.google.com/run/docs/tutorials)
 * [Google Cloud Run permissions to query BigQuery](https://stackoverflow.com/questions/59107407/google-cloud-run-permissions-to-query-bigquery)

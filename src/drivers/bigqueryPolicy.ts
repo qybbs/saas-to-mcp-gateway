@@ -21,7 +21,7 @@ export const validateQuerySafety = (sql: string): { safe: boolean; reason?: stri
 
   // 3. Must start with SELECT or WITH ... SELECT
   if (!sqlWithoutComments.startsWith('select') && !sqlWithoutComments.startsWith('with')) {
-    return { safe: false, reason: 'Hanya query SELECT (atau WITH ... SELECT) yang diizinkan.', detectedTables };
+    return { safe: false, reason: 'Only SELECT (or WITH ... SELECT) queries are allowed.', detectedTables };
   }
 
   // 4. Denylist DDL/DML/Scripting keywords
@@ -32,19 +32,19 @@ export const validateQuerySafety = (sql: string): { safe: boolean; reason?: stri
   for (const word of forbiddenKeywords) {
     const regex = new RegExp(String.raw`\b${word}\b`, 'i');
     if (regex.test(sqlWithoutComments)) {
-      return { safe: false, reason: `Query mengandung keyword terlarang: "${word}"`, detectedTables };
+      return { safe: false, reason: `Query contains forbidden keyword: "${word}"`, detectedTables };
     }
   }
 
   // 5. Table Allowlist verification
   if (detectedTables.length === 0) {
-    return { safe: false, reason: 'Tidak dapat mendeteksi tabel rujukan. Pastikan penulisan tabel menggunakan format `dataset.table`.', detectedTables };
+    return { safe: false, reason: 'Unable to detect referenced table. Ensure table format is `dataset.table`.', detectedTables };
   }
 
   for (const table of detectedTables) {
     const parts = table.split('.');
     if (!isTableAllowlisted(parts[0], parts[1])) {
-      return { safe: false, reason: `Tabel "${table}" tidak terdaftar dalam allowlist.`, detectedTables };
+      return { safe: false, reason: `Table "${table}" is not in the allowlist.`, detectedTables };
     }
   }
 

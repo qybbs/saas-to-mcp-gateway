@@ -90,7 +90,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
       .sign(secretKey);
   });
 
-  it('harus menolak request jika token tidak valid', async () => {
+  it('should reject request if token is invalid', async () => {
     const res = await request(app)
       .post('/atlassian/mcp')
       .set('Authorization', 'Bearer invalid-token')
@@ -102,7 +102,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
     expect(res.status).toBe(401);
   });
 
-  it('harus berhasil menginisialisasi koneksi MCP', async () => {
+  it('should successfully initialize MCP connection', async () => {
     const res = await request(app)
       .post('/atlassian/mcp')
       .set('Authorization', `Bearer ${token}`)
@@ -115,7 +115,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
     expect(res.body.result.serverInfo.name).toBe('enterprise-mcp-gateway');
   });
 
-  it('harus merespon 202 pada notifications/initialized', async () => {
+  it('should respond 202 on notifications/initialized', async () => {
     const res = await request(app)
       .post('/atlassian/mcp')
       .set('Authorization', `Bearer ${token}`)
@@ -127,7 +127,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
     expect(res.status).toBe(202);
   });
 
-  it('harus mendaftar semua tools pada tools/list', async () => {
+  it('should list all tools on tools/list', async () => {
     const res = await request(app)
       .post('/atlassian/mcp')
       .set('Authorization', `Bearer ${token}`)
@@ -142,7 +142,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
   });
 
   describe('tools/call', () => {
-    it('harus memanggil bigquery_list_allowed_tables', async () => {
+    it('should call bigquery_list_allowed_tables', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -158,7 +158,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
       expect(res.body.result.content[0].text).toContain('table1');
     });
 
-    it('harus memanggil bigquery_describe_table', async () => {
+    it('should call bigquery_describe_table', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -178,7 +178,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
       expect(res.body.result.content[0].text).toContain('Mock Description');
     });
 
-    it('harus menolak bigquery_describe_table jika parameter kurang', async () => {
+    it('should reject bigquery_describe_table if arguments are missing', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -198,7 +198,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
       expect(res.body.result.content[0].text).toContain('required');
     });
 
-    it('harus memanggil bigquery_estimate_query_cost', async () => {
+    it('should call bigquery_estimate_query_cost', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -217,7 +217,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
       expect(res.body.result.content[0].text).toContain('bytesScanned');
     });
 
-    it('harus menolak bigquery_estimate_query_cost jika query tidak aman', async () => {
+    it('should reject bigquery_estimate_query_cost if query is unsafe', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -237,7 +237,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
       expect(res.body.result.content[0].text).toContain('Rejected');
     });
 
-    it('harus memanggil bigquery_execute_readonly_query', async () => {
+    it('should call bigquery_execute_readonly_query', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -256,7 +256,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
       expect(res.body.result.content[0].text).toContain('"id": "1"');
     });
 
-    it('harus memanggil bigquery_search_allowed_tables', async () => {
+    it('should call bigquery_search_allowed_tables', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)
@@ -275,7 +275,7 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
       expect(res.body.result.content[0].text).toContain('table1');
     });
 
-    it('harus menolak bigquery_search_allowed_tables jika keyword kosong', async () => {
+    it('should reject bigquery_search_allowed_tables if keyword is empty', async () => {
       const res = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', `Bearer ${token}`)

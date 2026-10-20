@@ -219,18 +219,18 @@ export const searchAllowedTables = async (keyword: string) => {
   const tablesConfig = list.split(',').map(s => s.replace(/\s+/g, '')).filter(Boolean);
   const lowercaseKeyword = keyword.toLowerCase();
   
-  // 1. Saring tabel dari allowlist yang cocok dengan kata kunci
+  // 1. Filter tables from allowlist matching the keyword
   const matchedConfigs = tablesConfig.filter(tableConfig => 
     tableConfig.toLowerCase().includes(lowercaseKeyword)
   );
   
   if (matchedConfigs.length === 0) {
     return {
-      message: `Tidak ditemukan tabel dalam allowlist yang cocok dengan kata kunci "${keyword}".`
+      message: `No tables found in allowlist matching keyword "${keyword}".`
     };
   }
   
-  // Limit pencarian maksimal ke 5 tabel untuk menghindari payload bengkak & rate-limiting
+  // Limit search to a maximum of 5 tables to prevent oversized payload & rate-limiting
   const limitedConfigs = matchedConfigs.slice(0, 5);
   const results = [];
   
@@ -245,7 +245,7 @@ export const searchAllowedTables = async (keyword: string) => {
     } catch (e: any) {
       results.push({
         table: tableConfig,
-        error: `Gagal memuat skema: ${e.message}`
+        error: `Failed to load schema: ${e.message}`
       });
     }
   }

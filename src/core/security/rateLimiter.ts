@@ -31,13 +31,13 @@ export class RateLimiter {
   }
 
   /**
-   * Memeriksa apakah request untuk key tertentu masih berada di dalam limit sliding window.
+   * Checks whether a request for a specific key is still within the sliding window limit.
    */
   checkRateLimit(key: string, customLimit?: number, customWindowMs?: number): RateLimitResult {
     const limit = customLimit ?? this.getMaxRequests();
     const windowMs = customWindowMs ?? this.getWindowMs();
 
-    // Jika limit <= 0, fitur rate limiting dinonaktifkan (Personal Mode)
+    // If limit <= 0, rate limiting is disabled (Personal Mode)
     if (limit <= 0) {
       return {
         allowed: true,
@@ -50,7 +50,7 @@ export class RateLimiter {
     const threshold = now - windowMs;
 
     let timestamps = this.requestHistory.get(key) || [];
-    // Buang timestamp yang sudah lewat dari window
+    // Discard timestamps that have passed the sliding window
     timestamps = timestamps.filter((t) => t > threshold);
 
     if (timestamps.length >= limit) {
@@ -63,7 +63,7 @@ export class RateLimiter {
       };
     }
 
-    // Catat request baru
+    // Record new request timestamp
     timestamps.push(now);
     this.requestHistory.set(key, timestamps);
 
@@ -78,7 +78,7 @@ export class RateLimiter {
   }
 
   /**
-   * Reset data rate limit (berguna untuk testing atau admin reset)
+   * Resets rate limit data (useful for testing or admin resets)
    */
   clear(): void {
     this.requestHistory.clear();

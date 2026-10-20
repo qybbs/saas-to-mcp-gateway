@@ -8,13 +8,13 @@ import { sanitizeLogString } from '../../core/logging/audit';
 export const genericRouter = Router();
 
 /**
- * Middleware untuk validasi opsional API Key pada adapter generik
+ * Middleware for optional API Key validation on the generic adapter
  */
 export const authenticateGeneric = (req: Request, res: Response, next: NextFunction) => {
   const adapterConfig = gatewayConfig?.inboundAdapters?.generic;
   const expectedApiKey = adapterConfig?.apiKey;
 
-  // Jika API Key dikonfigurasi dan tidak kosong, wajibkan otentikasi
+  // If API Key is configured and non-empty, require authentication
   if (expectedApiKey && expectedApiKey.trim() !== '') {
     const authHeader = req.headers.authorization;
     const xApiKey = req.headers['x-api-key'];
@@ -36,7 +36,7 @@ export const authenticateGeneric = (req: Request, res: Response, next: NextFunct
 };
 
 /**
- * Handler helper untuk Direct JSON-RPC POST (misal /mcp)
+ * Helper handler for Direct JSON-RPC POST (e.g., /mcp)
  */
 export const handleDirectMcpRequest = async (req: Request, res: Response) => {
   const adapterConfig = gatewayConfig?.inboundAdapters?.generic;

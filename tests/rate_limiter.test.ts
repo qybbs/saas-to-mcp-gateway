@@ -12,7 +12,7 @@ describe('RateLimiter (Dual-Mode Security Guardrail)', () => {
   });
 
   describe('Personal Mode (Unthrottled / Zero-Friction)', () => {
-    it('harus membolehkan semua request jika limit <= 0 (default personal mode)', () => {
+    it('should allow all requests when limit <= 0 (default personal mode)', () => {
       const limiter = new RateLimiter({ maxRequests: 0, windowMs: 60000 });
 
       for (let i = 0; i < 20; i++) {
@@ -23,7 +23,7 @@ describe('RateLimiter (Dual-Mode Security Guardrail)', () => {
       }
     });
 
-    it('harus membolehkan request jika customLimit bernilai 0 atau negatif', () => {
+    it('should allow requests if customLimit is 0 or negative', () => {
       const limiter = new RateLimiter({ maxRequests: 5, windowMs: 60000 });
       const result = limiter.checkRateLimit('generic:dev@localhost', 0);
       expect(result.allowed).toBe(true);
@@ -35,7 +35,7 @@ describe('RateLimiter (Dual-Mode Security Guardrail)', () => {
   });
 
   describe('Enterprise Mode (Sliding Window Throttling)', () => {
-    it('harus menghitung sisa quota dan memblokir request saat limit terlampaui', () => {
+    it('should calculate remaining quota and block requests when limit is exceeded', () => {
       const limiter = new RateLimiter({ maxRequests: 3, windowMs: 60000 });
       const key = 'atlassian:corp-user@enterprise.com';
 
@@ -54,50 +54,50 @@ describe('RateLimiter (Dual-Mode Security Guardrail)', () => {
       expect(res3.allowed).toBe(true);
       expect(res3.remaining).toBe(0);
 
-      // Request 4 (melebihi limit)
+      // Request 4 (exceeds limit)
       const res4 = limiter.checkRateLimit(key);
       expect(res4.allowed).toBe(false);
       expect(res4.remaining).toBe(0);
       expect(res4.resetMs).toBeGreaterThan(0);
     });
 
-    it('harus mengisolasi quota antar user dan adapter berbeda', () => {
+    it('should isolate quotas between different users and adapters', () => {
       const limiter = new RateLimiter({ maxRequests: 2, windowMs: 60000 });
 
-      // Alice di Atlassian
+      // Alice in Atlassian
       expect(limiter.checkRateLimit('atlassian:alice@company.com').allowed).toBe(true);
       expect(limiter.checkRateLimit('atlassian:alice@company.com').allowed).toBe(true);
       expect(limiter.checkRateLimit('atlassian:alice@company.com').allowed).toBe(false);
 
-      // Alice di Generic adapter memiliki bucket berbeda
+      // Alice in Generic adapter has a different bucket
       expect(limiter.checkRateLimit('generic:alice@company.com').allowed).toBe(true);
 
-      // Bob memiliki bucket sendiri
+      // Bob has his own bucket
       expect(limiter.checkRateLimit('atlassian:bob@company.com').allowed).toBe(true);
     });
 
-    it('harus mereset limit setelah window waktu berlalu (sliding window)', () => {
+    it('should reset limit after window time has elapsed (sliding window)', () => {
       vi.useFakeTimers();
-      const limiter = new RateLimiter({ maxRequests: 2, windowMs: 10000 }); // 10 detik
+      const limiter = new RateLimiter({ maxRequests: 2, windowMs: 10000 }); // 10 seconds
       const key = 'atlassian:user@company.com';
 
-      // Konsumsi semua slot
+      // Consume all slots
       expect(limiter.checkRateLimit(key).allowed).toBe(true);
       expect(limiter.checkRateLimit(key).allowed).toBe(true);
       expect(limiter.checkRateLimit(key).allowed).toBe(false);
 
-      // Maju 5 detik: masih belum lewat 10 detik window
+      // Advance 5 seconds: still within 10-second window
       vi.advanceTimersByTime(5000);
       expect(limiter.checkRateLimit(key).allowed).toBe(false);
 
-      // Maju 6 detik lagi (total 11 detik): window pertama sudah lewat
+      // Advance 6 more seconds (total 11 seconds): first window expired
       vi.advanceTimersByTime(6000);
       const afterWindow = limiter.checkRateLimit(key);
       expect(afterWindow.allowed).toBe(true);
       expect(afterWindow.remaining).toBe(1);
     });
 
-    it('harus dapat di-clear secara manual via limiter.clear()', () => {
+    it('should be manually clearable via limiter.clear()', () => {
       const limiter = new RateLimiter({ maxRequests: 1, windowMs: 60000 });
       const key = 'test-key';
 

@@ -52,12 +52,12 @@ describe('StdioDriver', () => {
   });
 
   describe('initialize', () => {
-    it('harus throw error jika command kosong', async () => {
+    it('should throw an error if command is empty', async () => {
       const invalidDriver = new StdioDriver({ name: 'x', prefix: '', command: '' });
       await expect(invalidDriver.initialize()).rejects.toThrow(/Command is required/);
     });
 
-    it('harus membuat child process dan fetch tools', async () => {
+    it('should spawn child process and fetch tools', async () => {
       const initPromise = driver.initialize();
 
       // Simulate readline receiving the response for tools/list
@@ -78,7 +78,7 @@ describe('StdioDriver', () => {
   });
 
   describe('message handling and sendRequest', () => {
-    it('harus menghandle response error dari JSON-RPC', async () => {
+    it('should handle JSON-RPC error response', async () => {
       const initPromise = driver.initialize();
       setTimeout(() => {
         mockRl.emit('line', JSON.stringify({
@@ -91,7 +91,7 @@ describe('StdioDriver', () => {
       await expect(initPromise).rejects.toThrow('Method not found');
     });
 
-    it('harus mengabaikan baris kosong dan message non-RPC', async () => {
+    it('should ignore empty lines and non-RPC messages', async () => {
       const initPromise = driver.initialize();
 
       setTimeout(() => {
@@ -111,7 +111,7 @@ describe('StdioDriver', () => {
   });
 
   describe('process events', () => {
-    it('harus merespons event error dari child process', async () => {
+    it('should handle error events from child process', async () => {
       const initPromise = driver.initialize();
 
       setTimeout(() => {
@@ -121,7 +121,7 @@ describe('StdioDriver', () => {
       await expect(initPromise).rejects.toThrow('Process crash');
     });
 
-    it('harus merespons event exit dari child process', async () => {
+    it('should handle exit events from child process', async () => {
       const initPromise = driver.initialize();
 
       setTimeout(() => {
@@ -145,7 +145,7 @@ describe('StdioDriver', () => {
       await initPromise;
     });
 
-    it('harus mengirim tools/call dan parse hasilnya', async () => {
+    it('should send tools/call and parse result', async () => {
       const callPromise = driver.callTool('my_tool', { a: 1 });
       
       setTimeout(() => {
@@ -162,7 +162,7 @@ describe('StdioDriver', () => {
       expect(result).toEqual({ success: true });
     });
 
-    it('harus throw error jika result.isError true', async () => {
+    it('should throw error if result.isError is true', async () => {
       const callPromise = driver.callTool('bad_tool', {});
       
       setTimeout(() => {
@@ -181,7 +181,7 @@ describe('StdioDriver', () => {
   });
 
   describe('handshake', () => {
-    it('harus melakukan initialize & notifications/initialized jika handshake diaktifkan', async () => {
+    it('should perform initialize and notifications/initialized when handshake is enabled', async () => {
       const handshakeDriver = new StdioDriver({
         name: 'test_handshake',
         prefix: 'hs_',

@@ -1,24 +1,24 @@
 # Docker & Container Deployment Guide
 
-Panduan membangun, menjalankan, dan mempublikasikan image container untuk **Enterprise SaaS-to-MCP Gateway** (`saas-to-mcp-gateway`).
+Comprehensive guide for building, running, and publishing container images for the **Enterprise SaaS-to-MCP Gateway** (`saas-to-mcp-gateway`).
 
 ---
 
-## 1. Menjalankan via Docker Compose (Lokal)
+## 1. Running via Docker Compose (Local)
 
-Cara termudah menjalankan gateway secara lokal dalam container terisolasi:
+The simplest way to run the gateway locally inside an isolated container:
 
 ```bash
-# 1. Pastikan file .env sudah dikonfigurasi
+# 1. Ensure .env file is configured
 cp .env.example .env
 
-# 2. Build dan jalankan service
+# 2. Build and run the service
 docker-compose up -d --build
 
-# 3. Periksa status log
+# 3. Inspect logs
 docker-compose logs -f saas-to-mcp-gateway
 
-# 4. Uji health check
+# 4. Verify health check
 curl http://localhost:3000/generic/health
 ```
 
@@ -26,44 +26,44 @@ curl http://localhost:3000/generic/health
 
 ## 2. GitHub Container Registry (GHCR) CI/CD Workflow
 
-Repositori ini menyertakan workflow GitHub Actions [`.github/workflows/release-docker.yml`](file:///Users/OUT2305/Repo/bigquery-mcp/.github/workflows/release-docker.yml) yang otomatis membangun multi-arch image (amd64/arm64) dan mengunggahnya ke **GitHub Container Registry (GHCR)**.
+This repository includes a GitHub Actions workflow [`.github/workflows/release-docker.yml`](file:///Users/OUT2305/Repo/bigquery-mcp/.github/workflows/release-docker.yml) that automatically builds multi-arch images (amd64/arm64) and pushes them to the **GitHub Container Registry (GHCR)**.
 
-### Memicu (Trigger) Workflow Rilis
-Workflow ini berjalan otomatis ketika ada tag versi baru dengan awalan `v` (misal `v1.1.0`) yang di-*push*, atau saat Anda mempublikasikan *Release* baru di GitHub:
+### Triggering the Release Workflow
+The workflow triggers automatically whenever a new version tag prefixed with `v` (e.g., `v1.1.0`) is pushed, or when a new GitHub *Release* is published:
 
 ```bash
-# 1. Tambahkan tag versi baru
+# 1. Create a new version tag
 git tag v1.1.0
 
-# 2. Push tag ke GitHub
+# 2. Push tag to GitHub
 git push origin v1.1.0
 ```
 
-### Pengaturan Workflow Permissions di GitHub
-Workflow menggunakan token `${{ secrets.GITHUB_TOKEN }}` bawaan dengan izin `packages: write`.
-Untuk memastikan repositori Anda mengizinkannya:
-1. Buka halaman repositori di GitHub.
-2. Masuk ke **Settings** > **Actions** > **General**.
-3. Gulir ke bagian **Workflow permissions**.
-4. Pilih opsi **Read and write permissions**.
+### GitHub Workflow Permissions Configuration
+The workflow uses the built-in `${{ secrets.GITHUB_TOKEN }}` with `packages: write` permissions.
+To ensure your repository allows this:
+1. Open your repository page on GitHub.
+2. Navigate to **Settings** > **Actions** > **General**.
+3. Scroll down to the **Workflow permissions** section.
+4. Select the **Read and write permissions** option.
 
-### Mengatur Visibilitas Paket (GitHub Packages)
-Setelah workflow pertama kali selesai mengunggah image ke GHCR:
-1. Buka profil GitHub Anda dan masuk ke tab **Packages**.
-2. Cari paket bernama `saas-to-mcp-gateway`.
-3. Secara default, GitHub menyetel visibilitas paket sebagai **Private**.
-4. **Opsi Deployment:**
-   - **Enterprise / Private**: Pertahankan visibilitas *Private*, lalu di **Package Settings** > **Manage Actions access**, pastikan repositori memiliki akses *Read*.
-   - **Public / Open Source**: Ubah visibilitas menjadi *Public* di bagian *Danger Zone*. Image dapat ditarik publik tanpa autentikasi:
+### Managing Package Visibility (GitHub Packages)
+Once the workflow has published the image to GHCR for the first time:
+1. Go to your GitHub profile and navigate to the **Packages** tab.
+2. Locate the package named `saas-to-mcp-gateway`.
+3. By default, GitHub sets package visibility to **Private**.
+4. **Deployment Options:**
+   - **Enterprise / Private**: Keep visibility as *Private*, then in **Package Settings** > **Manage Actions access**, ensure the repository has *Read* access.
+   - **Public / Open Source**: Switch visibility to *Public* in the *Danger Zone*. The image can then be pulled publicly without authentication:
      ```bash
      docker pull ghcr.io/<your-github-username>/saas-to-mcp-gateway:latest
      ```
 
 ---
 
-## 3. Deployment ke Google Cloud Run via Google Artifact Registry (GAR)
+## 3. Deploying to Google Cloud Run via Google Artifact Registry (GAR)
 
-Untuk deployment produksi perusahaan langsung di Google Cloud:
+For enterprise production deployments directly on Google Cloud:
 
 ```bash
 # 1. Set environment variables
@@ -71,10 +71,10 @@ export GCP_PROJECT="your-gcp-project-id"
 export REGION="asia-southeast1"
 export REPO_NAME="mcp-gateways"
 
-# 2. Build dan submit image ke GAR
+# 2. Build and submit image to GAR
 gcloud builds submit --tag ${REGION}-docker.pkg.dev/${GCP_PROJECT}/${REPO_NAME}/saas-to-mcp-gateway:latest
 
-# 3. Deploy ke Cloud Run
+# 3. Deploy to Cloud Run
 gcloud run deploy saas-to-mcp-gateway \
   --image ${REGION}-docker.pkg.dev/${GCP_PROJECT}/${REPO_NAME}/saas-to-mcp-gateway:latest \
   --platform managed \

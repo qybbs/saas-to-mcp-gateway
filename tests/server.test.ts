@@ -22,7 +22,7 @@ describe('Express Server API', () => {
   });
 
   describe('GET /health', () => {
-    it('harus merespon dengan status ok', async () => {
+    it('should respond with ok status', async () => {
       const response = await request(app).get('/health');
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
@@ -33,7 +33,7 @@ describe('Express Server API', () => {
   });
 
   describe('GET /', () => {
-    it('harus merespon dengan status ok pada root', async () => {
+    it('should respond with ok status on root', async () => {
       const response = await request(app).get('/');
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('ok');
@@ -41,7 +41,7 @@ describe('Express Server API', () => {
   });
 
   describe('CORS Middleware', () => {
-    it('harus mengizinkan request dari origin yang diperbolehkan', async () => {
+    it('should allow request from allowed origin', async () => {
       const response = await request(app)
         .get('/health')
         .set('Origin', 'https://api.atlassian.com');
@@ -49,7 +49,7 @@ describe('Express Server API', () => {
       expect(response.headers['access-control-allow-origin']).toBe('https://api.atlassian.com');
     });
 
-    it('harus menolak request dari origin yang tidak diperbolehkan', async () => {
+    it('should reject request from disallowed origin', async () => {
       const response = await request(app)
         .get('/health')
         .set('Origin', 'http://malicious-site.com');
@@ -59,7 +59,7 @@ describe('Express Server API', () => {
   });
 
   describe('POST /mcp', () => {
-    it('harus menolak request tanpa header Authorization', async () => {
+    it('should reject request without Authorization header', async () => {
       const response = await request(app)
         .post('/atlassian/mcp')
         .send({
@@ -72,7 +72,7 @@ describe('Express Server API', () => {
       expect(response.body.error.message).toContain('Missing or invalid Bearer token');
     });
 
-    it('harus menolak request dengan token invalid', async () => {
+    it('should reject request with invalid token', async () => {
       const response = await request(app)
         .post('/atlassian/mcp')
         .set('Authorization', 'Bearer invalid.token.here')
@@ -86,7 +86,7 @@ describe('Express Server API', () => {
       expect(response.body.error.message).toContain('Unauthorized: Token validation failed');
     });
 
-    it('harus menolak request jika jsonrpc bukan 2.0', async () => {
+    it('should reject request if jsonrpc is not 2.0', async () => {
       const secret = Buffer.from('a3N2ZHNkZnNkZmRzZnNkZnNkZmRzZnNkZnNkZnNkZmQ=', 'base64');
       const token = await new jose.SignJWT({ email: 'test@example.com' })
         .setProtectedHeader({ alg: 'HS256' })
@@ -107,7 +107,7 @@ describe('Express Server API', () => {
       expect(response.body.error.message).toContain('jsonrpc must be "2.0"');
     });
 
-    it('harus merespon method not found untuk method yang tidak dikenal', async () => {
+    it('should respond method not found for unknown methods', async () => {
       const secret = Buffer.from('a3N2ZHNkZnNkZmRzZnNkZnNkZmRzZnNkZnNkZnNkZmQ=', 'base64');
       const token = await new jose.SignJWT({ email: 'test@example.com' })
         .setProtectedHeader({ alg: 'HS256' })
@@ -128,7 +128,7 @@ describe('Express Server API', () => {
       expect(response.body.error.message).toContain('Method not found');
     });
 
-    it('harus merespon tool not found jika tools/call meminta tool yang tidak ada', async () => {
+    it('should respond tool not found if tools/call requests non-existent tool', async () => {
       const secret = Buffer.from('a3N2ZHNkZnNkZmRzZnNkZnNkZmRzZnNkZnNkZnNkZmQ=', 'base64');
       const token = await new jose.SignJWT({ email: 'test@example.com' })
         .setProtectedHeader({ alg: 'HS256' })

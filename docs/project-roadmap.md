@@ -1,10 +1,10 @@
 # Roadmap: Enterprise SaaS-to-MCP Adapter Gateway
 
-Roadmap ini memetakan transisi proyek dari spesifik BigQuery & Atlassian MCP Server menjadi sebuah **Enterprise SaaS-to-MCP Adapter Gateway** yang universal, aman, dan modular.
+This roadmap outlines the evolution of the project from a BigQuery & Atlassian specific MCP server into a universal, secure, and modular **Enterprise SaaS-to-MCP Adapter Gateway**.
 
 ---
 
-## Gambaran Umum Arsitektur Target
+## Target Architecture Overview
 
 ```mermaid
 graph LR
@@ -29,125 +29,124 @@ graph LR
 
 ---
 
-## Rincian Fase Pengembangan
+## Development Phases Breakdown
 
-### Fase 1: Refactoring & Isolasi Arsitektur (Foundations)
-Fase ini fokus memisahkan logika Atlassian yang saat ini bercampur di dalam kode utama agar menjadi modul independen serta mempersiapkan fondasi modul bersama.
+### Phase 1: Architecture Decoupling & Isolation (Foundations) [COMPLETED]
+This phase focuses on isolating Atlassian-specific logic from the core gateway engine into independent modules and laying the foundation for shared modules.
 
-*   **Pemisahan Inbound Adapter (Atlassian)**:
-    *   Memindahkan logika Dynamic Client Registration (DCR) dan token exchange dari [`oauth.ts`](file:///Users/OUT2305/Repo/bigquery-mcp/src/oauth.ts) ke `src/adapters/atlassian/`.
-    *   Memastikan [`server.ts`](file:///Users/OUT2305/Repo/bigquery-mcp/src/server.ts) bertindak sebagai HTTP Router bersih yang mendistribusikan request ke adapter masing-masing.
-*   **Abstraksi Modul Otentikasi Bersama (Shared Auth Module)**:
-    *   Membuat modul inti `src/core/auth/` untuk membungkus logika generik OAuth 2.0/OIDC (verifikasi tanda tangan JWT, penyimpanan kunci JWKS, dan penanganan state PKCE) agar tidak terjadi duplikasi kode saat mengintegrasikan adapter lain (seperti OpenAI atau Slack).
+*   **Inbound Adapter Decoupling (Atlassian)**:
+    *   Migrate Dynamic Client Registration (DCR) and token exchange logic from [`oauth.ts`](file:///Users/OUT2305/Repo/bigquery-mcp/src/oauth.ts) to `src/adapters/atlassian/`.
+    *   Ensure [`server.ts`](file:///Users/OUT2305/Repo/bigquery-mcp/src/server.ts) acts as a clean HTTP Router distributing requests to respective adapters.
+*   **Shared Auth Module Abstraction**:
+    *   Build `src/core/auth/` to encapsulate generic OAuth 2.0/OIDC logic (JWT signature verification, JWKS key management, and PKCE state handling) to prevent code duplication when integrating future adapters (e.g., OpenAI or Slack).
 *   **Decoupling Core MCP Router**:
-    *   Membuat modul `src/core/mcpRouter.ts` yang murni menangani JSON-RPC request/response MCP tanpa ketergantungan langsung ke Express `Request` / `Response` object.
-*   **Generalisasi Konfigurasi**:
-    *   Membuat file konfigurasi terpusat (misal `src/config/gateway.config.ts`) untuk mengaktifkan/menonaktifkan adapter tertentu berdasarkan variabel lingkungan (`.env`).
+    *   Create `src/core/mcpRouter.ts` to handle pure MCP JSON-RPC requests/responses independently of Express `Request` / `Response` objects.
+*   **Configuration Centralization**:
+    *   Create a centralized config loader (e.g., `src/config/gateway.config.ts`) to enable or disable specific adapters based on environment variables (`.env`).
 
-### Fase 2: Pengembangan Outbound Drivers (Downstream Connectivity) [SELESAI]
-Menyediakan berbagai cara bagi gateway untuk mengeksekusi tool dari berbagai sumber secara modular menggunakan `DriverManager` terpusat.
+### Phase 2: Outbound Drivers (Downstream Connectivity) [COMPLETED]
+Provide modular execution pathways for downstream MCP tools via a centralized `DriverManager`.
 
 *   **Direct TypeScript Driver**: 
-    *   Membungkus logic seperti [`bigquery.ts`](file:///Users/OUT2305/Repo/bigquery-mcp/src/bigquery.ts) sebagai modul yang dipanggil secara lokal.
+    *   Encapsulate in-process logic like [`bigquery.ts`](file:///Users/OUT2305/Repo/bigquery-mcp/src/bigquery.ts) as locally callable modules.
 *   **Local Stdio Subprocess Bridge**:
-    *   Memungkinkan gateway menjalankan server MCP pihak ketiga (misal: Python/Go) secara lokal sebagai *child process* dan berkomunikasi menggunakan input/output standard.
+    *   Enable the gateway to spawn third-party MCP servers (e.g., Python/Go) locally as child processes and communicate via standard I/O streams.
 *   **Remote SSE Proxy Driver**:
-    *   Menghubungkan gateway ke MCP server internal lain yang berjalan di jaringan privat menggunakan HTTP/SSE.
+    *   Bridge the gateway to external or internal HTTP/SSE MCP servers running within private networks.
 
-### Fase 3: Integrasi Inbound Adapters Baru & Konfigurasi Deklaratif
-Menambahkan pintu masuk bagi platform AI non-Atlassian serta menyediakan antarmuka kustom untuk pihak ketiga, serta memetakan relasi antara Inbound dan Outbound secara aman.
+### Phase 3: Inbound Adapters & Declarative Configuration [COMPLETED]
+Add entry points for non-Atlassian AI platforms, support declarative multi-driver registration, and establish secure scoping between inbound adapters and outbound drivers.
 
-*   **Penyusunan Kontrak Konfigurasi Terpusat (`gateway-mcp-config.json`)**:
-    *   Membangun file konfigurasi JSON untuk mendaftarkan banyak (*multi-instance*) inbound adapter dan outbound driver sekaligus secara terstruktur, menggantikan batasan flat `.env`.
-    *   Mendukung *environment variable substitution* (seperti `${SONARQUBE_TOKEN}`) agar rahasia/token tetap tersimpan aman di `.env` dan tidak *hardcoded* di file JSON.
-*   **Inbound-to-Outbound Scoping (Access Control) [SELESAI]**:
-    *   Menyediakan pemetaan hak akses (`allowedDrivers`) di konfigurasi setiap inbound adapter, sehingga adapter tertentu hanya diizinkan memanggil driver tertentu (misal: Atlassian hanya mengakses BigQuery, sedangkan generic adapter dapat mengakses BigQuery & SonarQube).
-    *   Memodifikasi `DriverManager`, `Router`, dan inbound handler agar memfilter daftar *tools* secara dinamis dan menolak (`403 Forbidden` / `-32000 Access Denied`) pemanggilan tool di luar driver yang diizinkan.
-*   **Generic Inbound Adapter (Cursor, Claude Code, Standard MCP Clients) [SELESAI]**:
-    *   *SSE Transport*: Mengimplementasikan SSE stream transport resmi (`GET /generic/sse` dan root `/sse`, serta `POST /generic/messages` dan root `/messages`).
-    *   *Direct Streamable HTTP / JSON-RPC*: Menyediakan direct POST (`POST /generic/mcp` dan root `/mcp`) untuk pengujian cepat stateless / curl.
-    *   *Otentikasi*: Mendukung validasi opsional API Key (`Authorization: Bearer <key>` atau `X-API-Key: <key>`).
-    *   *Packaging*: Menyediakan `SKILL.md` standar yang mendefinisikan guardrails, urutan pemanggilan tool (Discovery -> Schema -> Cost Estimation -> Execution), dan panduan setup Cursor & Claude Code.
+*   **Declarative Central Configuration (`gateway-mcp-config.json`)**:
+    *   Build a structured JSON configuration to register multi-instance inbound adapters and outbound drivers simultaneously, replacing flat `.env` constraints.
+    *   Support environment variable substitution (e.g., `${SONARQUBE_TOKEN}`) so secrets remain securely in `.env` without hardcoding in JSON files.
+*   **Inbound-to-Outbound Scoping (Access Control) [COMPLETED]**:
+    *   Provide access mapping (`allowedDrivers`) in each inbound adapter configuration, restricting specific adapters to designated drivers (e.g., Atlassian only accesses BigQuery, while the generic adapter accesses BigQuery & SonarQube).
+    *   Equip `DriverManager`, `Router`, and inbound handlers to dynamically filter tools and reject unauthorized calls (`403 Forbidden` / `-32000 Access Denied`).
+*   **Generic Inbound Adapter (Cursor, Claude Code, Standard MCP Clients) [COMPLETED]**:
+    *   *SSE Transport*: Implement standard SSE streaming (`GET /generic/sse` and root `/sse`, plus `POST /generic/messages` and root `/messages`).
+    *   *Direct Streamable HTTP / JSON-RPC*: Provide direct POST (`POST /generic/mcp` and root `/mcp`) for stateless testing and curl invocations.
+    *   *Authentication*: Support optional API Key validation (`Authorization: Bearer <key>` or `X-API-Key: <key>`).
+    *   *Packaging*: Provide standard `SKILL.md` defining guardrails, tool discovery lifecycle (Discovery -> Schema -> Cost Estimation -> Execution), and setup guides for Cursor & Claude Code.
 *   **OpenAI Action Adapter**:
-    *   *Translasi Protokol*: Membuat parser yang secara otomatis menerjemahkan tool schema MCP menjadi dokumentasi **OpenAPI (Swagger) JSON**.
-    *   *Otentikasi*: Menyediakan endpoint otentikasi standar (OAuth 2.0 atau Static API Key) yang bisa dibaca oleh OpenAI.
+    *   *Protocol Translation*: Automatically translate MCP tool schemas into **OpenAPI (Swagger) JSON** specifications.
+    *   *Authentication*: Expose standard authentication endpoints (OAuth 2.0 or Static API Key) recognizable by OpenAI Assistants.
 *   **GitHub Copilot Extension Adapter**:
-    *   *Otentikasi*: Logika untuk memverifikasi tanda tangan JWT dari GitHub App.
-    *   *Mapping*: Memetakan format interaksi Copilot Agent ke format panggilan tool MCP.
+    *   *Authentication*: Verify incoming GitHub App JWT signatures.
+    *   *Mapping*: Map Copilot Agent interaction payloads into MCP tool calls.
 *   **Slack Agent Adapter**:
-    *   *Otentikasi*: Logika untuk memverifikasi header `X-Slack-Signature` dan request token.
+    *   *Authentication*: Verify `X-Slack-Signature` and request tokens.
 *   **Custom Inbound Adapter (Plugin System)**:
-    *   *Abstraksi Kontrak*: Mendefinisikan interface/abstract class `BaseInboundAdapter` untuk standarisasi pembuatan adapter baru secara mandiri oleh pengembang eksternal.
-    *   *Dynamic Loader*: Membangun mekanisme registrasi dinamis agar gateway dapat mendeteksi, memuat, dan mendaftarkan route HTTP untuk adapter kustom berdasarkan konfigurasi pengguna tanpa mengubah kode inti.
+    *   *Contract Abstraction*: Define `BaseInboundAdapter` interface/class to standardize custom adapter development by third parties.
+    *   *Dynamic Loader*: Enable the gateway to discover, load, and mount HTTP routes for custom adapters from configuration without altering core code.
 
-### Fase 4: Enterprise Security, Governance & Dual-Mode Operations [SELESAI]
-Fitur tingkat enterprise dan personal untuk memantau, mengontrol, dan memberikan fleksibilitas eksekusi AI agent.
+### Phase 4: Enterprise Security, Governance & Dual-Mode Operations [COMPLETED]
+Enterprise and developer-grade controls for monitoring, throttling, and cost management.
 
 *   **Dual-Mode Architecture (Personal Hub & Enterprise Gateway)**:
-    *   *Personal Mode (Solo Dev)*: Zero-friction local multiplexer tanpa batas rate limit atau kuota budget (`RATE_LIMIT_MAX_REQUESTS=0`, `USER_DAILY_BUDGET_BYTES=0`) untuk Claude Code, Cursor, OpenCode, dan Windsurf.
-    *   *Enterprise Mode (Corporate Governance)*: Multi-tenant gateway dengan throttling sliding-window per adapter/user dan kuota kueri harian per email.
+    *   *Personal Mode (Solo Dev)*: Zero-friction local multiplexer with no rate limits or query budget caps (`RATE_LIMIT_MAX_REQUESTS=0`, `USER_DAILY_BUDGET_BYTES=0`) for Claude Code, Cursor, OpenCode, and Windsurf.
+    *   *Enterprise Mode (Corporate Governance)*: Multi-tenant gateway featuring sliding-window rate throttling per adapter/user and daily byte quotas per email.
 *   **Rate Limiting & Cost Management (FinOps)**:
-    *   *RateLimiter*: Sliding-window limiter berbasis in-memory/per-user-adapter dengan respons error standar JSON-RPC `-32000` dan header waktu tunggu (`resetMs`).
-    *   *BudgetManager*: Akumulasi konsumsi byte harian (`USER_DAILY_BUDGET_BYTES`) dengan auto-reset UTC midnight dan pre-check proyeksi query byte.
+    *   *RateLimiter*: In-memory sliding-window limiter per user/adapter returning standard JSON-RPC `-32000` errors and retry cooldowns (`resetMs`).
+    *   *BudgetManager*: Daily query byte accumulation (`USER_DAILY_BUDGET_BYTES`) with midnight UTC auto-reset and proactive query cost pre-checks.
 *   **User Identity Propagation (UIP) & FinOps Attribution**:
-    *   Meneruskan `ToolContext` (`userEmail`, `adapterName`, `requestId`, `clientIp`) secara agnostik ke semua downstream drivers.
-    *   Melampirkan label GCP otomatis (`user_email`, `mcp_adapter`) pada setiap BigQuery Query Job agar biaya dapat diatribusikan ke masing-masing pengguna korporat di GCP Cloud Billing meskipun berjalan di atas Service Account bersama.
+    *   Forward `ToolContext` (`userEmail`, `adapterName`, `requestId`, `clientIp`) agnostically to all downstream drivers.
+    *   Automatically attach GCP labels (`user_email`, `mcp_adapter`) to BigQuery query jobs for granular cost attribution in GCP Cloud Billing, even when executing across a shared Service Account.
 *   **Centralized Audit Logging**:
-    *   Format log JSON terstruktur yang mencatat identitas user, `toolName`, `requestId`, `actualBytesBilled`, dan `jobId` untuk integrasi Cloud Logging/Datadog.
+    *   Emit structured JSON audit logs capturing user identity, `toolName`, `requestId`, `actualBytesBilled`, and `jobId` for seamless ingestion into Cloud Logging or Datadog.
 
-### Fase 5: Full Downstream Consolidation & Multi-Agent Local Hub [SELESAI]
-Konsolidasi total seluruh downstream MCP server yang sebelumnya terpecah di berbagai client editor ke dalam satu gateway hub.
+### Phase 5: Full Downstream Consolidation & Multi-Agent Local Hub [COMPLETED]
+Consolidate fragmented downstream MCP servers across IDEs and coding agents into a single unified gateway hub.
 
-*   **11 Outbound Drivers Agregasi (Total 199 Tools)**:
+*   **11 Aggregated Outbound Drivers (199 Total Tools)**:
     *   `bigquery` (5 tools), `sonarqube` (8 tools), `github` (26 tools), `notion` (24 tools), `clickhouse-docs` (2 tools), `clickhouse` (17 tools), `clickstack` (33 tools), `linkedin` (20 tools), `atlassian` (32 tools), `context7` (2 tools), `datadog` (30 tools).
-*   **Protokol Handshake Standar MCP & Request Timeout**:
-    *   Implementasi `initialize` + `notifications/initialized` resmi di `StdioDriver` dengan proteksi timeout 15 detik, menjamin kompatibilitas dengan server FastMCP berbasis Python (`mcp-server-linkedin`).
-*   **Sentralisasi Kredensial & Eliminasi Token Sprawl**:
-    *   Seluruh token/rahasia dipusatkan di `.env` gateway dan disubstitusi dinamis via `${VAR_NAME}` pada `gateway-mcp-config.json`.
-*   **Pembersihan Client OpenCode & Antigravity (Zero-Failure)**:
-    *   Menghilangkan server-server yang sebelumnya error (`atlassian 401`, `github 401`, `sonarqube 403`) di OpenCode; digantikan oleh satu koneksi stabil `gateway-hub` (`http://localhost:3000/sse`).
+*   **Standard MCP Handshake Protocol & Request Timeout**:
+    *   Implement formal `initialize` + `notifications/initialized` handshake in `StdioDriver` with a 15-second timeout safeguard, guaranteeing full compatibility with Python FastMCP servers (`mcp-server-linkedin`).
+*   **Credential Centralization & Secret Sprawl Elimination**:
+    *   All tokens and API keys are centralized in the gateway `.env` and injected dynamically via `${VAR_NAME}` in `gateway-mcp-config.json`.
+*   **OpenCode & Antigravity Client Cleanup (Zero-Failure)**:
+    *   Eliminated failing standalone servers (`atlassian 401`, `github 401`, `sonarqube 403`) in client editors, replaced by a single reliable `gateway-hub` connection (`http://localhost:3000/sse`).
 
-### Fase 6: Dokumentasi, Ecosystem Rebranding & Public Distribution [SELESAI]
-Standarisasi dan publikasi dokumentasi kelas dunia bagi pengembang dan enterprise.
+### Phase 6: Documentation, Ecosystem Rebranding & Universal Localization [COMPLETED]
+Standardize and publish enterprise-grade documentation and artifacts for global developers and teams.
 
-*   **Rebranding Package**: Rebranding identitas proyek menjadi `saas-to-mcp-gateway` (v1.1.0).
-*   **Production-Ready README.md**: Dokumentasi komprehensif mencakup arsitektur, quick-start Personal Mode 2 menit, panduan Enterprise Cloud Run, direktori 11 driver, dan setup coding agents.
-*   **Agent Skill Standard (`SKILL.md`)**: Penyelarasan format instruksi AI agent untuk namespacing tools dan guardrails kueri BigQuery.
-*   **Consolidation Handbook (`docs/consolidation-guide.md`)**: Panduan langkah demi langkah memigrasikan MCP editor lama ke gateway.
+*   **Package Rebranding**: Rebrand project identity to `saas-to-mcp-gateway` (v1.1.0).
+*   **Production-Ready README.md**: Comprehensive documentation covering architecture, 2-minute Personal Mode quick-start, Enterprise Cloud Run setup, 11-driver directory, and coding agent configurations.
+*   **Agent Skill Standard (`SKILL.md`)**: Align AI agent instructions for tool namespacing and BigQuery query guardrails.
+*   **Consolidation Handbook (`docs/consolidation-guide.md`)**: Step-by-step migration guide for moving fragmented editor MCP configs to the gateway.
+*   **Universal English Localization**: Complete translation of codebase comments, error strings, test suites, and documentation into technical English.
 
-### Fase 7: Dynamic Plugin SDK & Cloud-Native Orchestration [FUTURE]
-Rencana jangka panjang untuk ekspansi ekosistem gateway:
+### Phase 7: Dynamic Plugin SDK & Cloud-Native Orchestration [FUTURE]
+Long-term vision for ecosystem expansion:
 
-*   **Dynamic Plugin System**: Memungkinkan developer eksternal menulis inbound/outbound adapter sebagai npm package terpisah tanpa perlu mengubah kode sumber gateway.
-*   **Distributed Rate Limiting & Budgeting (Redis Backend)**: Transisi dari in-memory state ke Redis untuk mendukung multi-instance cluster di Kubernetes.
-*   **Helm Chart & Terraform Modules**: Otomasi penyebaran infrastruktur GCP (Cloud Run, Firestore, Service Accounts, Cloud Armor).
+*   **Dynamic Plugin System**: Enable external developers to publish inbound/outbound adapters as independent npm packages without modifying gateway core code.
+*   **Distributed Rate Limiting & Budgeting (Redis Backend)**: Transition from in-memory state to Redis to support multi-instance horizontal scaling in Kubernetes.
+*   **Helm Chart & Terraform Modules**: Infrastructure-as-code automation for deploying to GCP (Cloud Run, Firestore, Service Accounts, Cloud Armor).
 
 ---
 
-## Hal-Hal Penting yang Perlu Diulas (Potensi Luput / Design Challenge)
+## Architectural Challenges & Decisions
 
-Selama diskusi kita, ada beberapa detail teknis penting yang membutuhkan keputusan arsitektur khusus:
+### 1. Persistence Layer for Dynamic Clients (DCR) [COMPLETED]
+*   **Challenge**: When Atlassian Rovo executes Dynamic Client Registration (DCR), the gateway generates `client_id` and `client_secret` dynamically.
+*   **Issue**: In pure stateless deployments, container restarts invalidate client registrations.
+*   **Implemented Solution**:
+    *   **Repository Pattern**: Introduced `ClientRepository` interface and `ClientRepositoryFactory`.
+    *   **Three Persistence Modes**: `STATELESS` (JWE-based), `MEMORY` (in-memory map), and `FIRESTORE` (Google Cloud Firestore integration).
+    *   Mode is configured via the required `DCR_PERSISTENCE_MODE` environment variable.
 
-### 1. Persistence Layer untuk Dynamic Clients (DCR) [SELESAI]
-*   **Tantangan**: Saat Atlassian melakukan Dynamic Client Registration (DCR), server menghasilkan `client_id` dan `client_secret` secara dinamis.
-*   **Isu**: Sebelumnya, proyek dirancang stateless murni. Jika kontainer di-restart, data registrasi hilang.
-*   **Solusi Terimplementasi**:
-    *   **Abstraksi Database**: Membuat *interface* `ClientRepository` dan `ClientRepositoryFactory`.
-    *   **Tiga Mode Persistensi**: `STATELESS` (JWE-based), `MEMORY` (in-memory map), dan `FIRESTORE` (Google Cloud Firestore integration).
-    *   Pengaturan mode persistensi dikonfigurasi melalui variabel lingkungan `DCR_PERSISTENCE_MODE` (wajib diset).
+### 2. User Identity Propagation (UIP) & FinOps Attribution [COMPLETED]
+*   **Challenge**: AI Agents call APIs on behalf of end users (e.g., enterprise employees authenticated via Microsoft OIDC in Atlassian Rovo, or developers using Cursor).
+*   **Issue**: Prevent anonymous execution using unrestricted system tokens (*system-wide / god-mode*) without ownership or cost traceability.
+*   **Implemented Solution**:
+    *   **ToolContext Abstraction**: Pass user identity (`userEmail`), inbound adapter name (`adapterName`), request ID, and timestamps agnostically to all downstream MCP drivers.
+    *   **FinOps Label Attribution**: The BigQuery driver normalizes user emails and attaches them as GCP labels (`user_email`, `mcp_adapter`), enabling per-employee cost attribution in Google Cloud Billing despite using a shared Service Account.
+    *   **Audit Metadata**: BigQuery queries return `jobId` and `actualBytesBilled`, recorded in structured audit logs and deducted from daily user quotas.
 
-### 2. Sinkronisasi Identitas Pengguna (User Identity Propagation / UIP) [SELESAI]
-*   **Tantangan**: AI Agent memanggil API atas nama pengguna akhir (misalnya karyawan login Microsoft OIDC di Atlassian Rovo atau developer di Cursor).
-*   **Isu**: Menghindari eksekusi kueri menggunakan token akses dengan izin penuh (*system-wide / god-mode*) tanpa jejak kepemilikan dan atribusi biaya.
-*   **Solusi Terimplementasi**:
-    *   **Abstraksi ToolContext**: Meneruskan konteks identitas pengguna asli (`userEmail`), nama adapter inbound (`adapterName`), ID request, dan timestamp secara agnostik ke seluruh driver MCP.
-    *   **FinOps Label Attribution**: BigQuery driver secara otomatis menormalisasi email pengguna dan melampirkannya sebagai label GCP (`user_email`, `mcp_adapter`), memungkinkan pelacakan biaya per karyawan di Google Cloud Billing meskipun menggunakan Service Account terpusat.
-    *   **Audit Metadata**: Setiap kueri BigQuery mengembalikan `jobId` dan `actualBytesBilled` untuk dicatat pada log audit dan dikurangi dari kuota harian user.
-
-### 3. Latency dari Downstream Bridging
-*   **Tantangan**: Jalur kueri (SaaS Platform -> Gateway -> Downstream MCP -> Database) menambah latensi jaringan yang rentan memicu *timeout* (biasanya batas waktu di Slack/OpenAI adalah 3 detik).
-*   **Isu**: Eksekusi kueri analitik berat pada BigQuery atau *cold start* server downstream bisa dengan mudah melebihi batas waktu tersebut.
-*   **Solusi Terpilih**:
-    *   **Koneksi Persistent & Connection Pooling**: Menggunakan HTTP Keep-Alive dan *connection pooling* untuk mengurangi latensi jabat tangan (*handshake*) TCP/TLS.
-    *   **Pola Eksekusi Asinkron & Webhook**: Untuk kueri berat, gateway akan merespon cepat dengan status `202 Accepted` beserta ID pekerjaan (*job ID*). Setelah kueri selesai diproses di latar belakang, gateway mengirimkan hasilnya ke platform SaaS melalui *Webhook Callback URL*.
-    *   **Kaching & Dry-run Proyektif**: Menyimpan hasil kueri yang sering dipanggil ke dalam cache terdistribusi (Redis) dengan TTL singkat.
+### 3. Latency & Downstream Bridging
+*   **Challenge**: Multi-hop execution (SaaS Platform -> Gateway -> Downstream MCP -> Database) introduces network latency that can trigger SaaS timeouts (e.g., Slack/OpenAI 3-second limits).
+*   **Issue**: Heavy analytical queries in BigQuery or cold starts in downstream child processes can easily exceed tight timeouts.
+*   **Implemented & Recommended Solutions**:
+    *   **Persistent Connections & Connection Pooling**: Use HTTP Keep-Alive and connection pooling to eliminate TCP/TLS handshake latency.
+    *   **Asynchronous Execution Pattern & Webhooks**: For heavy analytical workloads, the gateway can return `202 Accepted` with a job ID and dispatch completed results to the SaaS platform via Webhook callbacks.
+    *   **Caching & Dry-run Projections**: Cache repetitive metadata queries in distributed caches (Redis) with short TTLs.

@@ -52,7 +52,7 @@ describe('FirestoreClientRepository', () => {
   });
 
   describe('register', () => {
-    it('harus membuat UUID client dan menyimpannya di Firestore', async () => {
+    it('should generate UUID client and save it in Firestore', async () => {
       const clientName = 'Test App';
       const redirectUris = ['http://localhost/callback'];
       
@@ -71,7 +71,7 @@ describe('FirestoreClientRepository', () => {
   });
 
   describe('get', () => {
-    it('harus mengembalikan ClientMetadata jika doc exists', async () => {
+    it('should return ClientMetadata if document exists', async () => {
       const mockData = {
         clientId: 'client_123',
         clientSecret: 'secret_abc',
@@ -94,7 +94,7 @@ describe('FirestoreClientRepository', () => {
       expect(result).toEqual(mockData);
     });
 
-    it('harus mengembalikan null jika doc tidak exists', async () => {
+    it('should return null if document does not exist', async () => {
       getMock.mockResolvedValueOnce({
         exists: false
       });

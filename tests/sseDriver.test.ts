@@ -19,12 +19,12 @@ describe('SseDriver', () => {
   });
 
   describe('initialize', () => {
-    it('harus throw error jika url kosong', async () => {
+    it('should throw error if url is empty', async () => {
       const invalidDriver = new SseDriver({ ...mockConfig, url: '' });
       await expect(invalidDriver.initialize()).rejects.toThrow(/URL is required/);
     });
 
-    it('harus memanggil fetchToolsFromDownstream dan mengisi cachedTools', async () => {
+    it('should call fetchToolsFromDownstream and populate cachedTools', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({
         data: {
           result: {
@@ -44,7 +44,7 @@ describe('SseDriver', () => {
       expect(tools).toEqual([{ name: 'test_tool' }]);
     });
 
-    it('harus menyertakan custom headers jika diberikan pada config', async () => {
+    it('should include custom headers when provided in config', async () => {
       const driverWithHeaders = new SseDriver({
         ...mockConfig,
         headers: {
@@ -77,7 +77,7 @@ describe('SseDriver', () => {
   });
 
   describe('listTools', () => {
-    it('harus mengembalikan cachedTools jika sudah ada', async () => {
+    it('should return cachedTools if already present', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({
         data: { result: { tools: [{ name: 'cached_tool' }] } }
       });
@@ -90,7 +90,7 @@ describe('SseDriver', () => {
       expect(axios.post).not.toHaveBeenCalled();
     });
 
-    it('harus fetchToolsFromDownstream jika cachedTools belum ada', async () => {
+    it('should fetchToolsFromDownstream if cachedTools does not exist', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({
         data: { result: { tools: [{ name: 'fetched_tool' }] } }
       });
@@ -102,7 +102,7 @@ describe('SseDriver', () => {
   });
 
   describe('sendRequest error handling', () => {
-    it('harus melempar error jika response berisi error dari downstream', async () => {
+    it('should throw error if response contains downstream error', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({
         data: {
           error: { message: 'Something went wrong' }
@@ -112,7 +112,7 @@ describe('SseDriver', () => {
       await expect(driver.listTools()).rejects.toThrow('Something went wrong');
     });
 
-    it('harus melempar error jika request axios gagal', async () => {
+    it('should throw error if axios request fails', async () => {
       vi.mocked(axios.post).mockRejectedValueOnce(new Error('Network Error'));
 
       await expect(driver.listTools()).rejects.toThrow('Network Error');
@@ -120,7 +120,7 @@ describe('SseDriver', () => {
   });
 
   describe('callTool', () => {
-    it('harus parse JSON content dari result', async () => {
+    it('should parse JSON content from result', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({
         data: {
           result: {
@@ -141,7 +141,7 @@ describe('SseDriver', () => {
       );
     });
 
-    it('harus melempar error jika result.isError true', async () => {
+    it('should throw error if result.isError is true', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({
         data: {
           result: {
@@ -154,7 +154,7 @@ describe('SseDriver', () => {
       await expect(driver.callTool('bad_tool', {})).rejects.toThrow('Tool failed internally');
     });
 
-    it('harus mengembalikan string mentah jika JSON parse gagal', async () => {
+    it('should return raw string if JSON parsing fails', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({
         data: {
           result: {
@@ -167,7 +167,7 @@ describe('SseDriver', () => {
       expect(res).toBe('Not JSON format');
     });
 
-    it('harus mengembalikan seluruh result jika content kosong', async () => {
+    it('should return entire result if content is empty', async () => {
       vi.mocked(axios.post).mockResolvedValueOnce({
         data: {
           result: { ok: 1 }
@@ -180,7 +180,7 @@ describe('SseDriver', () => {
   });
 
   describe('shutdown', () => {
-    it('harus selesai dengan aman', async () => {
+    it('should shut down gracefully', async () => {
       await expect(driver.shutdown()).resolves.toBeUndefined();
     });
   });

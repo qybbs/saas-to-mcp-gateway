@@ -49,13 +49,13 @@ describe('User Identity Propagation & FinOps Attribution (Phase 4)', () => {
   });
 
   describe('routeMcpRequest with ToolContext', () => {
-    it('harus memvalidasi dan meneruskan ToolContext lengkap ke downstream driver', async () => {
+    it('should validate and forward full ToolContext to downstream driver', async () => {
       const mockDriverCall = vi.fn().mockResolvedValue({
         status: 'ok',
         _audit: { actualBytesBilled: 1048576, jobId: 'job-123' },
       });
 
-      // Daftarkan tool mock ke driverManager singleton
+      // Register mock tool to singleton driverManager
       (driverManager as any).toolRegistry.set('mockDriver_doSomething', 'mockDriver');
       (driverManager as any).drivers.set('mockDriver', {
         name: 'mockDriver',
@@ -89,12 +89,12 @@ describe('User Identity Propagation & FinOps Attribution (Phase 4)', () => {
         { param: 'test' },
         context
       );
-      // Memastikan actualBytesBilled dicatat ke budgetManager untuk dev.tester@enterprise.com
+      // Ensure actualBytesBilled is recorded into budgetManager for dev.tester@enterprise.com
       const usage = budgetManager.getUsage('dev.tester@enterprise.com', 10000000);
       expect(usage.usedBytes).toBe(1048576);
     });
 
-    it('harus menolak request dengan JSON-RPC error -32000 jika rate limit terlampaui', async () => {
+    it('should reject request with JSON-RPC error -32000 when rate limit is exceeded', async () => {
       const user = 'spammy.agent@localhost';
       const context: ToolContext = {
         userEmail: user,
@@ -117,7 +117,7 @@ describe('User Identity Propagation & FinOps Attribution (Phase 4)', () => {
       process.env.RATE_LIMIT_MAX_REQUESTS = '1';
 
       try {
-        // Habiskan slot rate limit pertama
+        // Exhaust initial rate limit slot
         rateLimiter.checkRateLimit('generic:spammy.agent@localhost');
 
         const response = await routeMcpRequest(request, context);
@@ -130,9 +130,9 @@ describe('User Identity Propagation & FinOps Attribution (Phase 4)', () => {
       }
     });
 
-    it('harus menolak kueri bigquery jika kuota harian user telah habis', async () => {
+    it('should reject bigquery query when user daily quota is exhausted', async () => {
       const user = 'budget.exhausted@enterprise.com';
-      // Habiskan kuota 100 MB
+      // Exhaust 100 MB quota
       budgetManager.recordUsage(user, 100 * 1024 * 1024);
 
       const context: ToolContext = {
@@ -153,7 +153,7 @@ describe('User Identity Propagation & FinOps Attribution (Phase 4)', () => {
       };
 
       const originalBudget = process.env.USER_DAILY_BUDGET_BYTES;
-      process.env.USER_DAILY_BUDGET_BYTES = (50 * 1024 * 1024).toString(); // Batas 50 MB
+      process.env.USER_DAILY_BUDGET_BYTES = (50 * 1024 * 1024).toString(); // 50 MB limit
 
       try {
         const response = await routeMcpRequest(request, context);
@@ -168,7 +168,7 @@ describe('User Identity Propagation & FinOps Attribution (Phase 4)', () => {
   });
 
   describe('BigQuery Driver FinOps Label Attribution', () => {
-    it('harus membersihkan dan melampirkan label user_email & mcp_adapter ke BigQuery job', async () => {
+    it('should sanitize and attach user_email & mcp_adapter labels to BigQuery job', async () => {
       const context: ToolContext = {
         userEmail: 'Iqbal.Gozy+Finance@Corp.Domain.COM',
         adapterName: 'Atlassian-Rovo',
@@ -180,14 +180,14 @@ describe('User Identity Propagation & FinOps Attribution (Phase 4)', () => {
       expect(rows).toHaveLength(1);
       expect(rows[0].id).toBe('rec_1');
 
-      // Periksa metadata _queryMeta
+      // Check _queryMeta metadata
       const meta = (rows as any)._queryMeta;
       expect(meta).toBeDefined();
       expect(meta.jobId).toBe('mock_bq_job_789');
       expect(meta.actualBytesBilled).toBe(52428800);
     });
 
-    it('BigQueryDriver.callTool harus menyertakan jobId dan actualBytesBilled pada _audit', async () => {
+    it('BigQueryDriver.callTool should include jobId and actualBytesBilled in _audit', async () => {
       const driver = new BigQueryDriver();
       await driver.initialize();
 

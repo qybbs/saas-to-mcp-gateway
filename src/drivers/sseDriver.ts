@@ -92,6 +92,6 @@ export class SseDriver implements McpDriver {
   }
 
   async shutdown(): Promise<void> {
-    // Tutup EventSource atau koneksi jika ada persistent connection
+    // Close EventSource or connection if a persistent connection is open
   }
 }

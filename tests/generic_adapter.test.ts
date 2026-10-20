@@ -101,13 +101,13 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
   });
 
   describe('Health Checks', () => {
-    it('harus merespon 200 pada GET /generic/health', async () => {
+    it('should respond 200 on GET /generic/health', async () => {
       const res = await request(app).get('/generic/health');
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ status: 'ok', adapter: 'generic' });
     });
 
-    it('harus merespon 200 pada GET /generic', async () => {
+    it('should respond 200 on GET /generic', async () => {
       const res = await request(app).get('/generic');
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ status: 'ok', adapter: 'generic' });
@@ -115,7 +115,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
   });
 
   describe('Direct HTTP JSON-RPC (POST /generic/mcp & POST /mcp)', () => {
-    it('harus berhasil memproses method initialize via POST /generic/mcp', async () => {
+    it('should successfully process initialize method via POST /generic/mcp', async () => {
       const res = await request(app)
         .post('/generic/mcp')
         .send({
@@ -128,7 +128,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
       expect(res.body.result.serverInfo.name).toBe('enterprise-mcp-gateway');
     });
 
-    it('harus berhasil memproses method tools/list via root POST /mcp', async () => {
+    it('should successfully process tools/list method via root POST /mcp', async () => {
       const res = await request(app)
         .post('/mcp')
         .send({
@@ -142,7 +142,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
       expect(res.body.result.tools.some((t: any) => t.name === 'bigquery_list_allowed_tables')).toBe(true);
     });
 
-    it('harus berhasil mengeksekusi tools/call via POST /generic/mcp', async () => {
+    it('should successfully execute tools/call via POST /generic/mcp', async () => {
       const res = await request(app)
         .post('/generic/mcp')
         .send({
@@ -160,7 +160,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
   });
 
   describe('API Key Authentication', () => {
-    it('harus menolak request jika API Key diwajibkan tetapi tidak disertakan', async () => {
+    it('should reject request when API Key is required but not provided', async () => {
       gatewayConfig!.inboundAdapters.generic.apiKey = 'secret-key-123';
 
       const res = await request(app)
@@ -175,7 +175,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
       expect(res.body.error.message).toContain('Unauthorized: Invalid or missing API Key');
     });
 
-    it('harus menolak request jika API Key salah', async () => {
+    it('should reject request when API Key is incorrect', async () => {
       gatewayConfig!.inboundAdapters.generic.apiKey = 'secret-key-123';
 
       const res = await request(app)
@@ -190,7 +190,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
       expect(res.status).toBe(401);
     });
 
-    it('harus sukses dengan header Authorization Bearer yang valid', async () => {
+    it('should succeed with valid Authorization Bearer header', async () => {
       gatewayConfig!.inboundAdapters.generic.apiKey = 'secret-key-123';
 
       const res = await request(app)
@@ -206,7 +206,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
       expect(res.body.result.serverInfo.name).toBe('enterprise-mcp-gateway');
     });
 
-    it('harus sukses dengan header X-API-Key yang valid', async () => {
+    it('should succeed with valid X-API-Key header', async () => {
       gatewayConfig!.inboundAdapters.generic.apiKey = 'secret-key-123';
 
       const res = await request(app)
@@ -223,7 +223,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
   });
 
   describe('Standard SSE Transport (GET /generic/sse, GET /sse, POST /messages)', () => {
-    it('harus membuka stream SSE dan mengirim event endpoint pada GET /generic/sse', async () => {
+    it('should open SSE stream and emit endpoint event on GET /generic/sse', async () => {
       const response = await new Promise<any>((resolve, reject) => {
         const req = http.get(`http://127.0.0.1:${serverPort}/generic/sse`, (res) => {
           let chunk = '';
@@ -251,7 +251,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
       expect(response.body).toContain('/generic/messages?sessionId=');
     });
 
-    it('harus membuka stream SSE pada shortcut root GET /sse', async () => {
+    it('should open SSE stream on shortcut root GET /sse', async () => {
       const response = await new Promise<any>((resolve, reject) => {
         const req = http.get(`http://127.0.0.1:${serverPort}/sse`, (res) => {
           let chunk = '';
@@ -278,7 +278,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
       expect(response.body).toContain('event: endpoint');
     });
 
-    it('harus menolak POST /messages jika sessionId tidak disertakan', async () => {
+    it('should reject POST /messages if sessionId is missing', async () => {
       const res = await request(app)
         .post('/messages')
         .send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
@@ -287,7 +287,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
       expect(res.text).toContain('Missing sessionId');
     });
 
-    it('harus menolak POST /messages jika sessionId tidak valid atau kadaluwarsa', async () => {
+    it('should reject POST /messages if sessionId is invalid or expired', async () => {
       const res = await request(app)
         .post('/messages?sessionId=non-existent-session-id')
         .send({ jsonrpc: '2.0', id: 1, method: 'tools/list' });
@@ -296,7 +296,7 @@ describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {
       expect(res.text).toContain('not found or has expired');
     });
 
-    it('harus sukses memproses pesan melalui SSE stream dan POST /messages', async () => {
+    it('should successfully process messages via SSE stream and POST /messages', async () => {
       let sessionId = '';
       const sseReceivedMessages: string[] = [];
 

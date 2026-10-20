@@ -24,7 +24,7 @@ describe('OAuth Endpoints', () => {
   let redirectUri = 'http://localhost/callback';
 
   describe('POST /register', () => {
-    it('harus meregistrasi client dan mengembalikan client_id terenkripsi', async () => {
+    it('should register client and return encrypted client_id', async () => {
       const response = await request(app)
         .post('/atlassian/register')
         .send({
@@ -41,7 +41,7 @@ describe('OAuth Endpoints', () => {
       clientSecret = response.body.client_secret;
     });
 
-    it('harus menolak registrasi tanpa redirect_uris', async () => {
+    it('should reject registration without redirect_uris', async () => {
       const response = await request(app)
         .post('/atlassian/register')
         .send({
@@ -54,7 +54,7 @@ describe('OAuth Endpoints', () => {
   });
 
   describe('GET /oauth/authorize', () => {
-    it('harus menampilkan halaman otorisasi dan set cookie oauth_flow', async () => {
+    it('should display authorization page and set oauth_flow cookie', async () => {
       const response = await request(app)
         .get('/atlassian/oauth/authorize')
         .query({
@@ -75,7 +75,7 @@ describe('OAuth Endpoints', () => {
       expect(cookies[0]).toContain('oauth_flow=');
     });
 
-    it('harus menolak permintaan jika client_id invalid', async () => {
+    it('should reject request if client_id is invalid', async () => {
       const response = await request(app)
         .get('/atlassian/oauth/authorize')
         .query({
@@ -91,7 +91,7 @@ describe('OAuth Endpoints', () => {
   });
 
   describe('POST /oauth/login', () => {
-    it('harus menolak login jika cookie oauth_flow tidak ada', async () => {
+    it('should reject login if oauth_flow cookie is missing', async () => {
       const response = await request(app)
         .post('/atlassian/oauth/login')
         .send({
@@ -103,7 +103,7 @@ describe('OAuth Endpoints', () => {
       expect(response.text).toContain('Session expired or invalid flow');
     });
 
-    it('harus berhasil login dengan kredensial yang benar', async () => {
+    it('should successfully log in with valid credentials', async () => {
       const authResponse = await request(app)
         .get('/atlassian/oauth/authorize')
         .query({
@@ -130,7 +130,7 @@ describe('OAuth Endpoints', () => {
       expect(loginResponse.headers.location).toContain('state=xyz123');
     });
 
-    it('harus menolak login jika email atau password salah', async () => {
+    it('should reject login if email or password is incorrect', async () => {
       const authResponse = await request(app)
         .get('/atlassian/oauth/authorize')
         .query({
@@ -156,7 +156,7 @@ describe('OAuth Endpoints', () => {
       expect(response.headers.location).toContain('error=login_failed');
     });
 
-    it('harus menolak login jika flow token tidak valid', async () => {
+    it('should reject login if flow token is invalid', async () => {
       const response = await request(app)
         .post('/atlassian/oauth/login')
         .set('Cookie', 'oauth_flow=invalid.token.here')
@@ -171,7 +171,7 @@ describe('OAuth Endpoints', () => {
   });
 
   describe('POST /oauth/token', () => {
-    it('harus menolak jika grant_type bukan authorization_code', async () => {
+    it('should reject if grant_type is not authorization_code', async () => {
       const response = await request(app)
         .post('/atlassian/oauth/token')
         .send({
@@ -182,7 +182,7 @@ describe('OAuth Endpoints', () => {
       expect(response.body.error).toBe('unsupported_grant_type');
     });
 
-    it('harus menolak jika code tidak ada', async () => {
+    it('should reject if code is missing', async () => {
       const response = await request(app)
         .post('/atlassian/oauth/token')
         .send({
@@ -193,7 +193,7 @@ describe('OAuth Endpoints', () => {
       expect(response.body.error).toBe('invalid_request');
     });
 
-    it('harus sukses menukarkan authorization code dengan access token', async () => {
+    it('should successfully exchange authorization code for access token', async () => {
       const authResponse = await request(app)
         .get('/atlassian/oauth/authorize')
         .query({
@@ -233,7 +233,7 @@ describe('OAuth Endpoints', () => {
       expect(tokenResponse.body.token_type).toBe('Bearer');
     });
 
-    it('harus mendukung Basic Auth header untuk client_id', async () => {
+    it('should support Basic Auth header for client_id', async () => {
       const authResponse = await request(app)
         .get('/atlassian/oauth/authorize')
         .query({
@@ -273,7 +273,7 @@ describe('OAuth Endpoints', () => {
       expect(tokenResponse.body).toHaveProperty('access_token');
     });
 
-    it('harus menolak jika code token tidak valid atau kedaluwarsa', async () => {
+    it('should reject if code token is invalid or expired', async () => {
       const response = await request(app)
         .post('/atlassian/oauth/token')
         .send({
@@ -288,7 +288,7 @@ describe('OAuth Endpoints', () => {
       expect(response.body.error_description).toContain('invalid or expired');
     });
 
-    it('harus menolak jika client_id tidak cocok dengan code issuer', async () => {
+    it('should reject if client_id does not match code issuer', async () => {
       const authResponse = await request(app)
         .get('/atlassian/oauth/authorize')
         .query({
@@ -328,7 +328,7 @@ describe('OAuth Endpoints', () => {
       expect(tokenResponse.body.error_description).toContain('Client ID mismatch');
     });
 
-    it('harus sukses melakukan token exchange dengan S256 PKCE challenge method', async () => {
+    it('should successfully perform token exchange with S256 PKCE challenge method', async () => {
       const verifier = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ123_verifier';
       const challenge = crypto
         .createHash('sha256')
@@ -373,7 +373,7 @@ describe('OAuth Endpoints', () => {
       expect(tokenResponse.body).toHaveProperty('access_token');
     });
 
-    it('harus menolak token exchange jika PKCE challenge tidak cocok', async () => {
+    it('should reject token exchange if PKCE challenge does not match', async () => {
       const authResponse = await request(app)
         .get('/atlassian/oauth/authorize')
         .query({
@@ -415,7 +415,7 @@ describe('OAuth Endpoints', () => {
   });
 
   describe('GET /oauth/callback (OIDC Callback)', () => {
-    it('harus memproses callback OIDC dengan sukses', async () => {
+    it('should process OIDC callback successfully', async () => {
       const masterSecret = 'a3N2ZHNkZnNkZmRzZnNkZnNkZmRzZnNkZnNkZnNkZmQ=';
       const secretKey = Buffer.from(masterSecret, 'base64');
       const stateToken = await new jose.EncryptJWT({
@@ -463,7 +463,7 @@ describe('OAuth Endpoints', () => {
       fetchSpy.mockRestore();
     });
 
-    it('harus menolak callback jika code atau state tidak ada', async () => {
+    it('should reject callback if code or state is missing', async () => {
       const response = await request(app)
         .get('/atlassian/oauth/callback')
         .query({
@@ -473,7 +473,7 @@ describe('OAuth Endpoints', () => {
       expect(response.text).toContain('Missing code or state');
     });
 
-    it('harus menolak callback jika state invalid', async () => {
+    it('should reject callback if state is invalid', async () => {
       const response = await request(app)
         .get('/atlassian/oauth/callback')
         .query({
