@@ -1,12 +1,15 @@
 {
   "outboundDrivers": {
-    "bigquery": {
+   "bigquery": {
       "type": "stdio",
-      "command": "node",
-      "args": ["../custom-bigquery-mcp/dist/index.js"],
+      "command": "npx",
+      "args": ["-y", "github:qybbs/custom-bigquery-mcp"],
       "env": {
         "GCP_PROJECT_ID": "${GCP_PROJECT_ID}",
-        "ALLOWLIST_TABLES": "${ALLOWLIST_TABLES}"
+        "GCP_KEY_FILE_PATH": "${GCP_KEY_FILE_PATH}",
+        "ALLOWLIST_TABLES": "${ALLOWLIST_TABLES}",
+        "MAX_BYTES_BILLED": "${MAX_BYTES_BILLED}",
+        "ROW_LIMIT": "${ROW_LIMIT}"
       }
     },
     "sonarqube": {
