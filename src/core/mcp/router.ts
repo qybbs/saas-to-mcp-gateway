@@ -1,5 +1,4 @@
 import { writeAuditLog } from '../logging/audit';
-import { PolicyError } from './policy';
 import { driverManager } from './driverManager';
 import { ToolContext } from './context';
 import { rateLimiter } from '../security/rateLimiter';
@@ -94,23 +93,21 @@ const handleToolsCall = async (
     };
   }
 
-  // 2. Budget Quota Pre-Check (for execution queries)
-  if (toolName.includes('execute_readonly_query')) {
-    const budgetCheck = budgetManager.checkBudget(userEmail);
-    if (!budgetCheck.allowed) {
-      writeAuditLog({
-        requestId: id,
-        userEmail,
-        toolName,
-        status: 'REJECTED',
-        denialReason: budgetCheck.reason,
-      });
-      return {
-        jsonrpc: '2.0',
-        id,
-        error: { code: -32000, message: budgetCheck.reason! },
-      };
-    }
+  // 2. Budget Quota Pre-Check (if daily budget quota is configured)
+  const budgetCheck = budgetManager.checkBudget(userEmail);
+  if (!budgetCheck.allowed) {
+    writeAuditLog({
+      requestId: id,
+      userEmail,
+      toolName,
+      status: 'REJECTED',
+      denialReason: budgetCheck.reason,
+    });
+    return {
+      jsonrpc: '2.0',
+      id,
+      error: { code: -32000, message: budgetCheck.reason! },
+    };
   }
 
   // 3. Driver and Scoping Checks
@@ -155,9 +152,11 @@ const handleToolsCall = async (
       delete result._audit;
     }
 
-    // Record actual query bytes billed into user budget
+    // Record actual usage bytes reported by downstream driver into user budget
     if (metadata && typeof metadata.actualBytesBilled === 'number' && metadata.actualBytesBilled > 0) {
       budgetManager.recordUsage(userEmail, metadata.actualBytesBilled);
+    } else if (metadata && typeof metadata.bytesProcessed === 'number' && metadata.bytesProcessed > 0) {
+      budgetManager.recordUsage(userEmail, metadata.bytesProcessed);
     }
 
     // Assume the driver returns a native JS/TS object; format as JSON string if not already a string.
@@ -179,24 +178,6 @@ const handleToolsCall = async (
       },
     };
   } catch (err: any) {
-    if (err instanceof PolicyError) {
-      writeAuditLog({
-        requestId: id,
-        userEmail,
-        toolName,
-        status: 'REJECTED',
-        denialReason: err.message,
-        metadata: err.metadata,
-      });
-      return {
-        jsonrpc: '2.0',
-        id,
-        result: {
-          content: [{ type: 'text', text: `Rejected: ${err.message}` }],
-          isError: true,
-        },
-      };
-    }
 
     writeAuditLog({
       requestId: id,

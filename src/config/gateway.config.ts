@@ -26,34 +26,18 @@ const validateMasterSecretKey = (errors: string[]) => {
 };
 
 const validateGcpConfig = (errors: string[]) => {
-  if (!process.env.GCP_PROJECT_ID) {
-    errors.push('GCP_PROJECT_ID is not set.');
-  }
-  const keyPath = process.env.GCP_KEY_FILE_PATH;
-  if (keyPath && keyPath !== './path-to-your-service-account-key.json') {
-    if (!fs.existsSync(keyPath)) {
-      errors.push(`GCP_KEY_FILE_PATH file does not exist: "${keyPath}"`);
+  // GCP credentials are only required if DCR client persistence is backed by Firestore
+  if (process.env.DCR_PERSISTENCE_MODE === DcrPersistenceMode.FIRESTORE) {
+    if (!process.env.GCP_PROJECT_ID) {
+      errors.push('GCP_PROJECT_ID is required when DCR_PERSISTENCE_MODE is FIRESTORE.');
+    }
+    const keyPath = process.env.GCP_KEY_FILE_PATH;
+    if (keyPath && keyPath !== './path-to-your-service-account-key.json') {
+      if (!fs.existsSync(keyPath)) {
+        errors.push(`GCP_KEY_FILE_PATH file does not exist: "${keyPath}"`);
+      }
     }
   }
-};
-
-const validateAllowlistTables = (errors: string[]) => {
-  const allowlistRaw = process.env.ALLOWLIST_TABLES;
-  if (!allowlistRaw) {
-    errors.push('ALLOWLIST_TABLES is not set.');
-    return;
-  }
-  const tables = allowlistRaw.split(',').map(s => s.replace(/\s+/g, '')).filter(Boolean);
-  if (tables.length === 0) {
-    errors.push('ALLOWLIST_TABLES is empty.');
-    return;
-  }
-  tables.forEach(t => {
-    const parts = t.split('.');
-    if (parts.length < 2 || parts.length > 3 || parts.some(p => !p)) {
-      errors.push(`Invalid table format in ALLOWLIST_TABLES: "${t}". Expected "dataset.table" or "project.dataset.table".`);
-    }
-  });
 };
 
 const validateAuthProvider = (errors: string[]) => {
@@ -168,14 +152,11 @@ export const validateEnv = (): void => {
   const errors: string[] = [];
 
   validateMasterSecretKey(errors);
-  validateGcpConfig(errors);
-  validateAllowlistTables(errors);
-  validateAuthProvider(errors);
   validateDcrPersistenceMode(errors);
+  validateGcpConfig(errors);
+  validateAuthProvider(errors);
   loadGatewayConfig(errors);
   
-  validatePositiveInteger(process.env.MAX_BYTES_BILLED, 'MAX_BYTES_BILLED', errors);
-  validatePositiveInteger(process.env.ROW_LIMIT, 'ROW_LIMIT', errors);
   validatePositiveInteger(process.env.TOKEN_EXPIRATION_SECONDS, 'TOKEN_EXPIRATION_SECONDS', errors);
   validateNonNegativeInteger(process.env.RATE_LIMIT_MAX_REQUESTS, 'RATE_LIMIT_MAX_REQUESTS', errors);
   validatePositiveInteger(process.env.RATE_LIMIT_WINDOW_MS, 'RATE_LIMIT_WINDOW_MS', errors);

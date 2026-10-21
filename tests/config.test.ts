@@ -9,23 +9,20 @@ describe('validateEnv', () => {
   beforeEach(() => {
     // Set a valid baseline for all required variables
     process.env.MASTER_SECRET_KEY = 'a3N2ZHNkZnNkZmRzZnNkZnNkZmRzZnNkZnNkZnNkZmQ='; // 32 bytes base64
-    process.env.GCP_PROJECT_ID = 'test-project';
-    process.env.ALLOWLIST_TABLES = 'dataset.table1, project.dataset.table2';
     process.env.AUTH_PROVIDER = 'MOCK';
     process.env.MOCK_USER_EMAIL = 'test@example.com';
     process.env.MOCK_USER_PASSWORD = 'password123';
     process.env.DCR_PERSISTENCE_MODE = DcrPersistenceMode.STATELESS;
-    process.env.ACTIVE_DRIVERS = McpDriverType.BIGQUERY;
     
-    // Clear optional/OIDC ones
+    // Clear optional/OIDC and legacy GCP ones
+    delete process.env.GCP_PROJECT_ID;
+    delete process.env.GCP_KEY_FILE_PATH;
+    delete process.env.ALLOWLIST_TABLES;
     delete process.env.OIDC_CLIENT_ID;
     delete process.env.OIDC_CLIENT_SECRET;
     delete process.env.OIDC_AUTHORIZATION_ENDPOINT;
     delete process.env.OIDC_TOKEN_ENDPOINT;
     delete process.env.OIDC_REDIRECT_URI;
-    delete process.env.GCP_KEY_FILE_PATH;
-    delete process.env.MAX_BYTES_BILLED;
-    delete process.env.ROW_LIMIT;
     delete process.env.TOKEN_EXPIRATION_SECONDS;
   });
 
@@ -33,7 +30,7 @@ describe('validateEnv', () => {
     process.env = { ...originalEnv };
   });
 
-  it('should pass with a valid baseline configuration', () => {
+  it('should pass with a valid baseline configuration without any GCP or BigQuery variables', () => {
     expect(() => validateEnv()).not.toThrow();
   });
 
@@ -49,32 +46,23 @@ describe('validateEnv', () => {
     });
   });
 
-  describe('GCP Configuration validation', () => {
-    it('should throw if GCP_PROJECT_ID is missing', () => {
+  describe('GCP Configuration validation (conditional on Firestore)', () => {
+    it('should not throw if GCP_PROJECT_ID is missing in STATELESS mode', () => {
       delete process.env.GCP_PROJECT_ID;
-      expect(() => validateEnv()).toThrow(/GCP_PROJECT_ID is not set/);
+      expect(() => validateEnv()).not.toThrow();
     });
 
-    it('should throw if GCP_KEY_FILE_PATH points to a non-existent file', () => {
+    it('should throw if GCP_PROJECT_ID is missing when DCR_PERSISTENCE_MODE is FIRESTORE', () => {
+      process.env.DCR_PERSISTENCE_MODE = DcrPersistenceMode.FIRESTORE;
+      delete process.env.GCP_PROJECT_ID;
+      expect(() => validateEnv()).toThrow(/GCP_PROJECT_ID is required when DCR_PERSISTENCE_MODE is FIRESTORE/);
+    });
+
+    it('should throw if GCP_KEY_FILE_PATH points to a non-existent file when DCR_PERSISTENCE_MODE is FIRESTORE', () => {
+      process.env.DCR_PERSISTENCE_MODE = DcrPersistenceMode.FIRESTORE;
+      process.env.GCP_PROJECT_ID = 'test-project';
       process.env.GCP_KEY_FILE_PATH = './does-not-exist.json';
       expect(() => validateEnv()).toThrow(/GCP_KEY_FILE_PATH file does not exist/);
-    });
-  });
-
-  describe('ALLOWLIST_TABLES validation', () => {
-    it('should throw if missing', () => {
-      delete process.env.ALLOWLIST_TABLES;
-      expect(() => validateEnv()).toThrow(/ALLOWLIST_TABLES is not set/);
-    });
-
-    it('should throw if empty', () => {
-      process.env.ALLOWLIST_TABLES = '   ,  ';
-      expect(() => validateEnv()).toThrow(/ALLOWLIST_TABLES is empty/);
-    });
-
-    it('should throw if invalid format', () => {
-      process.env.ALLOWLIST_TABLES = 'dataset_table_without_dot';
-      expect(() => validateEnv()).toThrow(/Invalid table format in ALLOWLIST_TABLES/);
     });
   });
 
@@ -129,22 +117,24 @@ describe('validateEnv', () => {
 
   describe('Optional Limits validation', () => {
     it('should pass with valid limits', () => {
-      process.env.MAX_BYTES_BILLED = '1000';
-      process.env.ROW_LIMIT = '50';
+      process.env.TOKEN_EXPIRATION_SECONDS = '3600';
+      process.env.RATE_LIMIT_MAX_REQUESTS = '100';
+      process.env.RATE_LIMIT_WINDOW_MS = '60000';
+      process.env.USER_DAILY_BUDGET_BYTES = '104857600';
       expect(() => validateEnv()).not.toThrow();
     });
 
     it('should throw if limit is not an integer', () => {
-      process.env.ROW_LIMIT = '50.5';
-      expect(() => validateEnv()).toThrow(/ROW_LIMIT must be a positive integer/);
+      process.env.TOKEN_EXPIRATION_SECONDS = '50.5';
+      expect(() => validateEnv()).toThrow(/TOKEN_EXPIRATION_SECONDS must be a positive integer/);
     });
 
     it('should throw if limit is negative', () => {
-      process.env.MAX_BYTES_BILLED = '-1000';
-      expect(() => validateEnv()).toThrow(/MAX_BYTES_BILLED must be a positive integer/);
+      process.env.TOKEN_EXPIRATION_SECONDS = '-1000';
+      expect(() => validateEnv()).toThrow(/TOKEN_EXPIRATION_SECONDS must be a positive integer/);
     });
     
-    it('should throw if limit is zero', () => {
+    it('should throw if limit is zero for positive integer', () => {
       process.env.TOKEN_EXPIRATION_SECONDS = '0';
       expect(() => validateEnv()).toThrow(/TOKEN_EXPIRATION_SECONDS must be a positive integer/);
     });
