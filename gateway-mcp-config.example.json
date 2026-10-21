@@ -1,7 +1,13 @@
 {
   "outboundDrivers": {
     "bigquery": {
-      "type": "bigquery"
+      "type": "stdio",
+      "command": "node",
+      "args": ["../custom-bigquery-mcp/dist/index.js"],
+      "env": {
+        "GCP_PROJECT_ID": "${GCP_PROJECT_ID}",
+        "ALLOWLIST_TABLES": "${ALLOWLIST_TABLES}"
+      }
     },
     "sonarqube": {
       "type": "stdio",

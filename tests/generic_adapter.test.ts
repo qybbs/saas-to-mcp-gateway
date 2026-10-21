@@ -14,52 +14,46 @@ vi.mock('../src/config/gateway.config', async (importOriginal) => {
     gatewayConfig: {
       outboundDrivers: {
         bigquery: {
-          type: 'bigquery'
-        }
+          type: 'stdio',
+          command: 'node',
+          args: ['mock.js'],
+        },
       },
       inboundAdapters: {
         generic: {
           enabled: true,
           allowedDrivers: ['bigquery'],
-          apiKey: ''
-        }
-      }
-    }
+          apiKey: '',
+        },
+      },
+    },
   };
 });
 
-vi.mock('@google-cloud/bigquery', () => {
-  const getMetadataMock = vi.fn().mockResolvedValue([{
-    description: 'Mock Description',
-    type: 'TABLE',
-    numRows: '100',
-    schema: {
-      fields: [{ name: 'id', type: 'STRING', mode: 'REQUIRED' }]
-    }
-  }]);
-
-  const createQueryJobMock = vi.fn().mockResolvedValue([
-    {
-      id: 'job_123',
-      metadata: {
-        statistics: {
-          query: { totalBytesProcessed: '1073741824' }
-        }
-      },
-      getQueryResults: vi.fn().mockResolvedValue([[{ id: '1' }]])
-    }
-  ]);
-
-  class BigQueryMock {
-    dataset = vi.fn(() => ({
-      table: vi.fn(() => ({
-        getMetadata: getMetadataMock
-      }))
-    }));
-    createQueryJob = createQueryJobMock;
-  }
-
-  return { BigQuery: BigQueryMock };
+vi.mock('../src/drivers/stdioDriver', () => {
+  return {
+    StdioDriver: vi.fn().mockImplementation(function() {
+      return {
+        name: 'bigquery',
+        prefix: 'bigquery_',
+        initialize: vi.fn().mockResolvedValue(undefined),
+        listTools: vi.fn().mockResolvedValue([
+          {
+            name: 'list_allowed_tables',
+            description: 'List allowed tables',
+            inputSchema: { type: 'object', properties: {} },
+          },
+        ]),
+        callTool: vi.fn().mockImplementation(async (name: string, _args: any) => {
+          if (name === 'list_allowed_tables' || name === 'bigquery_list_allowed_tables') {
+            return { tables: ['dataset1.table1'] };
+          }
+          return { success: true };
+        }),
+        shutdown: vi.fn().mockResolvedValue(undefined),
+      } as any;
+    }),
+  };
 });
 
 describe('Generic Inbound Adapter (Cursor / Claude Code)', () => {

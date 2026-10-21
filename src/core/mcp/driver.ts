@@ -1,7 +1,6 @@
 import { ToolContext } from './context';
 
 export enum McpDriverType {
-  BIGQUERY = 'bigquery',
   STDIO = 'stdio',
   SSE = 'sse',
 }

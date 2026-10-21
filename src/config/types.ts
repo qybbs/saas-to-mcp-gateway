@@ -1,5 +1,5 @@
 export interface OutboundDriverConfig {
-  type: 'bigquery' | 'stdio' | 'sse';
+  type: 'stdio' | 'sse';
   command?: string;
   args?: string[];
   env?: Record<string, string>;

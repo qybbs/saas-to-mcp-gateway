@@ -3,7 +3,6 @@ import request from 'supertest';
 import * as jose from 'jose';
 import app from '../src/server';
 import { driverManager } from '../src/core/mcp/driverManager';
-import { BigQueryDriver } from '../src/drivers/bigqueryDriver';
 import { StdioDriver } from '../src/drivers/stdioDriver';
 import { DcrPersistenceMode } from '../src/core/auth/types';
 
@@ -14,7 +13,9 @@ vi.mock('../src/config/gateway.config', async (importOriginal) => {
     gatewayConfig: {
       outboundDrivers: {
         bigquery: {
-          type: 'bigquery'
+          type: 'stdio',
+          command: 'node',
+          args: ['mock.js']
         },
         sonarqube: {
           type: 'stdio',
@@ -37,7 +38,6 @@ vi.mock('../src/config/gateway.config', async (importOriginal) => {
   };
 });
 
-vi.mock('../src/drivers/bigqueryDriver');
 vi.mock('../src/drivers/stdioDriver');
 
 describe('Inbound Scoping Enforcement (allowedDrivers)', () => {
@@ -53,22 +53,20 @@ describe('Inbound Scoping Enforcement (allowedDrivers)', () => {
     process.env.MOCK_USER_EMAIL = 'test@example.com';
     process.env.MOCK_USER_PASSWORD = 'password123';
 
-    // Mock BigQuery Driver
-    vi.mocked(BigQueryDriver).mockImplementation(function() {
-      return {
-        name: 'bigquery',
-        prefix: 'bigquery_',
-        initialize: vi.fn().mockResolvedValue(undefined),
-        listTools: vi.fn().mockResolvedValue([
-          { name: 'query_data', description: 'BigQuery tool' }
-        ]),
-        callTool: vi.fn().mockResolvedValue({ rows: [] }),
-        shutdown: vi.fn().mockResolvedValue(undefined),
-      } as any;
-    });
-
-    // Mock Stdio Driver (SonarQube)
-    vi.mocked(StdioDriver).mockImplementation(function() {
+    // Mock Stdio Driver for bigquery and sonarqube
+    vi.mocked(StdioDriver).mockImplementation(function(config: any) {
+      if (config.name === 'bigquery') {
+        return {
+          name: 'bigquery',
+          prefix: 'bigquery_',
+          initialize: vi.fn().mockResolvedValue(undefined),
+          listTools: vi.fn().mockResolvedValue([
+            { name: 'query_data', description: 'BigQuery tool' }
+          ]),
+          callTool: vi.fn().mockResolvedValue({ rows: [] }),
+          shutdown: vi.fn().mockResolvedValue(undefined),
+        } as any;
+      }
       return {
         name: 'sonarqube',
         prefix: 'sonarqube_',

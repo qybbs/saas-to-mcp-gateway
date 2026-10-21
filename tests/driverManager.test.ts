@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { DriverManager } from '../src/core/mcp/driverManager';
 import { gatewayConfig } from '../src/config/gateway.config';
-import { BigQueryDriver } from '../src/drivers/bigqueryDriver';
 import { StdioDriver } from '../src/drivers/stdioDriver';
 import { SseDriver } from '../src/drivers/sseDriver';
 
@@ -11,7 +10,6 @@ vi.mock('../src/config/gateway.config', () => ({
   }
 }));
 
-vi.mock('../src/drivers/bigqueryDriver');
 vi.mock('../src/drivers/stdioDriver');
 vi.mock('../src/drivers/sseDriver');
 
@@ -29,34 +27,6 @@ describe('DriverManager', () => {
     it('should skip if there are no outboundDrivers', async () => {
       gatewayConfig.outboundDrivers = undefined as any;
       await expect(driverManager.initialize()).resolves.toBeUndefined();
-    });
-
-    it('should initialize bigquery driver', async () => {
-      gatewayConfig.outboundDrivers = {
-        testBq: { type: 'bigquery' }
-      };
-
-      const mockInit = vi.fn().mockResolvedValue(undefined);
-      const mockListTools = vi.fn().mockResolvedValue([{ name: 'tool1' }]);
-      vi.mocked(BigQueryDriver).mockImplementation(function() {
-        return {
-          name: 'testBq',
-          prefix: 'testBq_',
-          initialize: mockInit,
-          listTools: mockListTools,
-          callTool: vi.fn(),
-          shutdown: vi.fn(),
-        } as any;
-      });
-
-      await driverManager.initialize();
-
-      expect(BigQueryDriver).toHaveBeenCalledWith({ name: 'testBq', prefix: 'testBq_' });
-      expect(mockInit).toHaveBeenCalled();
-      
-      const tools = await driverManager.getToolsList();
-      expect(tools).toHaveLength(1);
-      expect(tools[0].name).toBe('testBq_tool1');
     });
 
     it('should initialize stdio driver', async () => {
@@ -181,11 +151,11 @@ describe('DriverManager', () => {
 
     it('should handle error if driver initialization fails', async () => {
       gatewayConfig.outboundDrivers = {
-        failDriver: { type: 'bigquery' }
+        failDriver: { type: 'stdio', command: 'node', args: ['mock.js'] }
       };
 
       const mockInit = vi.fn().mockRejectedValue(new Error('Init Failed'));
-      vi.mocked(BigQueryDriver).mockImplementation(function() {
+      vi.mocked(StdioDriver).mockImplementation(function() {
         return {
           name: 'failDriver',
           prefix: 'failDriver_',
@@ -204,10 +174,10 @@ describe('DriverManager', () => {
   describe('getToolsList & getDriverNameForTool', () => {
     beforeEach(async () => {
       gatewayConfig.outboundDrivers = {
-        d1: { type: 'bigquery' },
-        d2: { type: 'bigquery' }
+        d1: { type: 'stdio', command: 'node', args: ['mock1.js'] },
+        d2: { type: 'stdio', command: 'node', args: ['mock2.js'] }
       };
-      vi.mocked(BigQueryDriver).mockImplementation(function(config: any) {
+      vi.mocked(StdioDriver).mockImplementation(function(config: any) {
         return {
           name: config.name,
           prefix: config.prefix,
@@ -245,9 +215,9 @@ describe('DriverManager', () => {
     beforeEach(async () => {
       mockCallTool = vi.fn().mockResolvedValue({ success: true });
       gatewayConfig.outboundDrivers = {
-        mockD: { type: 'bigquery' }
+        mockD: { type: 'stdio', command: 'node', args: ['mock.js'] }
       };
-      vi.mocked(BigQueryDriver).mockImplementation(function() {
+      vi.mocked(StdioDriver).mockImplementation(function() {
         return {
           name: 'mockD',
           prefix: 'mockD_',
@@ -284,11 +254,11 @@ describe('DriverManager', () => {
       const mockShutdown2 = vi.fn().mockRejectedValue(new Error('Shutdown error'));
       
       gatewayConfig.outboundDrivers = {
-        d1: { type: 'bigquery' },
-        d2: { type: 'bigquery' }
+        d1: { type: 'stdio', command: 'node', args: ['mock1.js'] },
+        d2: { type: 'stdio', command: 'node', args: ['mock2.js'] }
       };
 
-      vi.mocked(BigQueryDriver)
+      vi.mocked(StdioDriver)
         .mockImplementationOnce(function() {
           return {
             name: 'd1',

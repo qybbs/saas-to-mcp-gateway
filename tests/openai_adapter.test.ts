@@ -13,7 +13,9 @@ vi.mock('../src/config/gateway.config', async (importOriginal) => {
     gatewayConfig: {
       outboundDrivers: {
         bigquery: {
-          type: 'bigquery',
+          type: 'stdio',
+          command: 'node',
+          args: ['mock.js'],
         },
       },
       inboundAdapters: {
@@ -27,40 +29,57 @@ vi.mock('../src/config/gateway.config', async (importOriginal) => {
   };
 });
 
-vi.mock('@google-cloud/bigquery', () => {
-  const getMetadataMock = vi.fn().mockResolvedValue([
-    {
-      description: 'Mock Description',
-      type: 'TABLE',
-      numRows: '100',
-      schema: {
-        fields: [{ name: 'id', type: 'STRING', mode: 'REQUIRED' }],
-      },
-    },
-  ]);
-
-  const createQueryJobMock = vi.fn().mockResolvedValue([
-    {
-      id: 'job_123',
-      metadata: {
-        statistics: {
-          query: { totalBytesProcessed: '1073741824' },
-        },
-      },
-      getQueryResults: vi.fn().mockResolvedValue([[{ id: '1' }]]),
-    },
-  ]);
-
-  class BigQueryMock {
-    dataset = vi.fn(() => ({
-      table: vi.fn(() => ({
-        getMetadata: getMetadataMock,
-      })),
-    }));
-    createQueryJob = createQueryJobMock;
-  }
-
-  return { BigQuery: BigQueryMock };
+vi.mock('../src/drivers/stdioDriver', () => {
+  return {
+    StdioDriver: vi.fn().mockImplementation(function() {
+      return {
+        name: 'bigquery',
+        prefix: 'bigquery_',
+        initialize: vi.fn().mockResolvedValue(undefined),
+        listTools: vi.fn().mockResolvedValue([
+          {
+            name: 'execute_readonly_query',
+            description: 'Execute readonly query',
+            inputSchema: { type: 'object', properties: { sql: { type: 'string' } } },
+          },
+          {
+            name: 'describe_table',
+            description: 'Describe table',
+            inputSchema: {
+              type: 'object',
+              properties: { datasetId: { type: 'string' }, tableId: { type: 'string' } },
+              required: ['datasetId', 'tableId'],
+            },
+          },
+          {
+            name: 'search_allowed_tables',
+            description: 'Search allowed tables',
+            inputSchema: {
+              type: 'object',
+              properties: { keyword: { type: 'string' } },
+              required: ['keyword'],
+            },
+          },
+        ]),
+        callTool: vi.fn().mockImplementation(async (name: string, args: any) => {
+          if (name === 'search_allowed_tables' || name === 'bigquery_search_allowed_tables') {
+            return { tables: [{ table: 'dataset1.table1' }] };
+          }
+          if (name === 'describe_table' || name === 'bigquery_describe_table') {
+            return { fields: [{ name: 'id', type: 'STRING' }] };
+          }
+          if (name === 'execute_readonly_query' || name === 'bigquery_execute_readonly_query') {
+            if (args?.sql?.includes('DROP')) {
+              throw new Error('Rejected: Query contains forbidden keyword: "drop"');
+            }
+            return [{ id: '1' }];
+          }
+          return { success: true };
+        }),
+        shutdown: vi.fn().mockResolvedValue(undefined),
+      } as any;
+    }),
+  };
 });
 
 describe('OpenAI Action Inbound Adapter (Custom GPTs / Assistants)', () => {

@@ -1,6 +1,12 @@
-// Export Express handlers for MCP
+// Export Core Gateway & MCP Router
+export { routeMcpRequest } from './core/mcp/router';
+export { driverManager } from './core/mcp/driverManager';
+export { rateLimiter } from './core/security/rateLimiter';
+export { budgetManager } from './core/security/budgetManager';
+
+// Export Inbound Adapter Handlers
 export { handleMcpRequest } from './adapters/atlassian/mcp';
-export { validateQuerySafety } from './drivers/bigqueryPolicy';
+export { generateOpenApiSpec } from './adapters/openai/openapiGenerator';
 
 // Export Configuration Validation
 export { validateEnv } from './config/gateway.config';
@@ -13,12 +19,3 @@ export {
   handleOidcCallback,
   submitLogin
 } from './adapters/atlassian/oauth';
-
-// Export BigQuery core tools
-export { 
-  listAllowedTables, 
-  describeTable, 
-  estimateQueryCost, 
-  executeReadonlyQuery, 
-  searchAllowedTables 
-} from './drivers/bigquery';

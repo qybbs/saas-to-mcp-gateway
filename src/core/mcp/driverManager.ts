@@ -1,6 +1,5 @@
 import { McpDriver, McpDriverType } from './driver';
 import { ToolContext } from './context';
-import { BigQueryDriver } from '../../drivers/bigqueryDriver';
 import { StdioDriver } from '../../drivers/stdioDriver';
 import { SseDriver } from '../../drivers/sseDriver';
 import { gatewayConfig } from '../../config/gateway.config';
@@ -25,9 +24,6 @@ export class DriverManager {
       const prefix = `${driverName}_`;
 
       switch (driverConfig.type) {
-        case 'bigquery':
-          driver = new BigQueryDriver({ name: driverName, prefix });
-          break;
         case 'stdio':
           if (!driverConfig.command) {
             console.error(`[DriverManager] Driver ${driverName} of type stdio missing command`);

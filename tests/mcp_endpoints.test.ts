@@ -4,7 +4,6 @@ import * as jose from 'jose';
 import app from '../src/server';
 import { DcrPersistenceMode } from '../src/core/auth/types';
 import { driverManager } from '../src/core/mcp/driverManager';
-import { McpDriverType } from '../src/core/mcp/driver';
 
 vi.mock('../src/config/gateway.config', async (importOriginal) => {
   const actual = await importOriginal<any>();
@@ -13,53 +12,101 @@ vi.mock('../src/config/gateway.config', async (importOriginal) => {
     gatewayConfig: {
       outboundDrivers: {
         bigquery: {
-          type: 'bigquery'
-        }
-      }
-    }
+          type: 'stdio',
+          command: 'node',
+          args: ['mock.js'],
+        },
+      },
+    },
   };
 });
 
-vi.mock('@google-cloud/bigquery', () => {
-  const getMetadataMock = vi.fn().mockResolvedValue([{
-    description: 'Mock Description',
-    type: 'TABLE',
-    numRows: '100',
-    schema: {
-      fields: [
-        { name: 'id', type: 'STRING', mode: 'REQUIRED' }
-      ]
-    }
-  }]);
-
-  const createQueryJobMock = vi.fn().mockResolvedValue([
-    {
-      id: 'job_123',
-      metadata: {
-        statistics: {
-          query: { totalBytesProcessed: '1073741824' }
-        }
-      },
-      getQueryResults: vi.fn().mockResolvedValue([
-        [{ id: '1' }]
-      ])
-    }
-  ]);
-
-  const tableMock = vi.fn(() => ({
-    getMetadata: getMetadataMock
-  }));
-
-  const datasetMock = vi.fn(() => ({
-    table: tableMock
-  }));
-
-  class BigQueryMock {
-    dataset = datasetMock;
-    createQueryJob = createQueryJobMock;
-  }
-
-  return { BigQuery: BigQueryMock };
+vi.mock('../src/drivers/stdioDriver', () => {
+  return {
+    StdioDriver: vi.fn().mockImplementation(function() {
+      return {
+        name: 'bigquery',
+        prefix: 'bigquery_',
+        initialize: vi.fn().mockResolvedValue(undefined),
+        listTools: vi.fn().mockResolvedValue([
+          {
+            name: 'list_allowed_tables',
+            description: 'List allowed tables',
+            inputSchema: { type: 'object', properties: {} },
+          },
+          {
+            name: 'describe_table',
+            description: 'Describe table',
+            inputSchema: {
+              type: 'object',
+              properties: { datasetId: { type: 'string' }, tableId: { type: 'string' } },
+              required: ['datasetId', 'tableId'],
+            },
+          },
+          {
+            name: 'estimate_query_cost',
+            description: 'Estimate query cost',
+            inputSchema: {
+              type: 'object',
+              properties: { sql: { type: 'string' } },
+              required: ['sql'],
+            },
+          },
+          {
+            name: 'execute_readonly_query',
+            description: 'Execute readonly query',
+            inputSchema: {
+              type: 'object',
+              properties: { sql: { type: 'string' } },
+              required: ['sql'],
+            },
+          },
+          {
+            name: 'search_allowed_tables',
+            description: 'Search allowed tables',
+            inputSchema: {
+              type: 'object',
+              properties: { keyword: { type: 'string' } },
+              required: ['keyword'],
+            },
+          },
+        ]),
+        callTool: vi.fn().mockImplementation(async (name: string, args: any) => {
+          if (name === 'list_allowed_tables' || name === 'bigquery_list_allowed_tables') {
+            return { tables: ['dataset1.table1', 'project2.dataset2.table2'] };
+          }
+          if (name === 'describe_table' || name === 'bigquery_describe_table') {
+            if (!args?.datasetId || !args?.tableId) {
+              throw new Error('datasetId and tableId are required');
+            }
+            return {
+              description: 'Mock Description',
+              type: 'TABLE',
+              numRows: '100',
+              schema: [{ name: 'id', type: 'STRING', mode: 'REQUIRED' }],
+            };
+          }
+          if (name === 'estimate_query_cost' || name === 'bigquery_estimate_query_cost') {
+            if (args?.sql?.includes('DROP')) {
+              throw new Error('Rejected: Query contains forbidden keyword');
+            }
+            return { bytesScanned: 1073741824, estimatedCostUSD: 0.005 };
+          }
+          if (name === 'execute_readonly_query' || name === 'bigquery_execute_readonly_query') {
+            return [{ id: '1' }];
+          }
+          if (name === 'search_allowed_tables' || name === 'bigquery_search_allowed_tables') {
+            if (!args?.keyword) {
+              throw new Error('keyword is required');
+            }
+            return { tables: ['dataset1.table1'] };
+          }
+          return { success: true };
+        }),
+        shutdown: vi.fn().mockResolvedValue(undefined),
+      } as any;
+    }),
+  };
 });
 
 describe('MCP Transport Endpoint (POST /mcp)', () => {
@@ -71,7 +118,6 @@ describe('MCP Transport Endpoint (POST /mcp)', () => {
     process.env.GCP_PROJECT_ID = 'test-project';
     process.env.ALLOWLIST_TABLES = 'dataset1.table1,project2.dataset2.table2';
     process.env.DCR_PERSISTENCE_MODE = DcrPersistenceMode.STATELESS;
-    process.env.ACTIVE_DRIVERS = McpDriverType.BIGQUERY;
     process.env.AUTH_PROVIDER = 'MOCK';
     process.env.MOCK_USER_EMAIL = 'test@example.com';
     process.env.MOCK_USER_PASSWORD = 'password123';
