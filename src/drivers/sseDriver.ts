@@ -9,12 +9,14 @@ export class SseDriver implements McpDriver {
   private customHeaders: Record<string, string>;
   private cachedTools: any[] | null = null;
   private messageCounter = 0;
+  private timeoutMs: number;
 
-  constructor(config: { name: string; prefix: string; url: string; headers?: Record<string, string> }) {
+  constructor(config: { name: string; prefix: string; url: string; headers?: Record<string, string>; timeoutMs?: number }) {
     this.name = config.name;
     this.prefix = config.prefix;
     this.endpointUrl = config.url;
     this.customHeaders = config.headers || {};
+    this.timeoutMs = config.timeoutMs ?? (process.env.MCP_DRIVER_TIMEOUT_MS ? parseInt(process.env.MCP_DRIVER_TIMEOUT_MS, 10) : 10000);
   }
 
   async initialize(): Promise<void> {
@@ -42,7 +44,7 @@ export class SseDriver implements McpDriver {
           'Content-Type': 'application/json',
           ...this.customHeaders
         },
-        timeout: 10000 // 10 detik timeout
+        timeout: this.timeoutMs
       });
 
       const data = response.data;

@@ -5,6 +5,8 @@ export interface OutboundDriverConfig {
   env?: Record<string, string>;
   url?: string;
   headers?: Record<string, string>;
+  timeoutMs?: number;
+  timeout?: number | string;
 }
 
 export interface InboundAdapterConfig {

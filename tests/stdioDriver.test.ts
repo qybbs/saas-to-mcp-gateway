@@ -178,6 +178,29 @@ describe('StdioDriver', () => {
 
       await expect(callPromise).rejects.toThrow('Tool internal error');
     });
+
+    it('should respect custom timeoutMs and reject with formatted timeout message', async () => {
+      const fastTimeoutDriver = new StdioDriver({
+        name: 'fast_timeout',
+        prefix: 'fast_',
+        command: 'dummy',
+        handshake: false,
+        timeoutMs: 50
+      });
+
+      const initPromise = fastTimeoutDriver.initialize();
+      setTimeout(() => {
+        mockRl.emit('line', JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: { tools: [] }
+        }));
+      }, 5);
+      await initPromise;
+
+      const callPromise = fastTimeoutDriver.callTool('slow_tool', {});
+      await expect(callPromise).rejects.toThrow('[StdioDriver] Request tools/call (id=2) timed out after 50ms');
+    });
   });
 
   describe('handshake', () => {

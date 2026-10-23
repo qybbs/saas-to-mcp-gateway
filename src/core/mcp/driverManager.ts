@@ -22,6 +22,17 @@ export class DriverManager {
     for (const [driverName, driverConfig] of Object.entries(config.outboundDrivers)) {
       let driver: McpDriver;
       const prefix = `${driverName}_`;
+      const timeoutMs = typeof driverConfig.timeoutMs === 'number'
+        ? driverConfig.timeoutMs
+        : typeof driverConfig.timeout === 'string'
+          ? (driverConfig.timeout.endsWith('ms')
+              ? parseInt(driverConfig.timeout, 10)
+              : driverConfig.timeout.endsWith('s')
+                ? parseInt(driverConfig.timeout, 10) * 1000
+                : parseInt(driverConfig.timeout, 10) || undefined)
+          : typeof driverConfig.timeout === 'number'
+            ? driverConfig.timeout
+            : undefined;
 
       switch (driverConfig.type) {
         case 'stdio':
@@ -37,7 +48,8 @@ export class DriverManager {
             env: {
               ...process.env,
               ...(driverConfig.env || {})
-            }
+            },
+            timeoutMs
           });
           break;
         case 'sse':
@@ -49,7 +61,8 @@ export class DriverManager {
             name: driverName,
             prefix,
             url: driverConfig.url,
-            headers: driverConfig.headers
+            headers: driverConfig.headers,
+            timeoutMs
           });
           break;
         default:

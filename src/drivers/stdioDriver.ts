@@ -13,17 +13,27 @@ export class StdioDriver implements McpDriver {
   private messageCounter = 0;
   private pendingRequests = new Map<number, { resolve: (val: any) => void; reject: (err: any) => void }>();
   private handshake: boolean;
+  private timeoutMs: number;
   
   // This will store the cached tools from the downstream server
   private cachedTools: any[] | null = null;
 
-  constructor(config: { name: string; prefix: string; command: string; args?: string[]; env?: Record<string, string | undefined>; handshake?: boolean }) {
+  constructor(config: {
+    name: string;
+    prefix: string;
+    command: string;
+    args?: string[];
+    env?: Record<string, string | undefined>;
+    handshake?: boolean;
+    timeoutMs?: number;
+  }) {
     this.name = config.name;
     this.prefix = config.prefix;
     this.command = config.command;
     this.args = config.args || [];
     this.env = config.env;
     this.handshake = config.handshake ?? true;
+    this.timeoutMs = config.timeoutMs ?? (process.env.MCP_DRIVER_TIMEOUT_MS ? parseInt(process.env.MCP_DRIVER_TIMEOUT_MS, 10) : 15000);
   }
 
   async initialize(): Promise<void> {
@@ -133,12 +143,14 @@ export class StdioDriver implements McpDriver {
     };
 
     return new Promise((resolve, reject) => {
+      const timeoutMs = this.timeoutMs;
       const timer = setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
-          reject(new Error(`[StdioDriver] Request ${method} (id=${id}) timed out after 15s`));
+          const timeoutStr = timeoutMs >= 1000 ? `${Math.round(timeoutMs / 1000)}s` : `${timeoutMs}ms`;
+          reject(new Error(`[StdioDriver] Request ${method} (id=${id}) timed out after ${timeoutStr}`));
         }
-      }, 15000);
+      }, timeoutMs);
 
       this.pendingRequests.set(id, {
         resolve: (val) => {

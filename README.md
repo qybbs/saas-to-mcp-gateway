@@ -8,8 +8,8 @@
 [![Google Cloud Run](https://img.shields.io/badge/GCP-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)](file:///Users/OUT2305/Repo/bigquery-mcp/docs/docker.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](file:///Users/OUT2305/Repo/bigquery-mcp/LICENSE)
 
-> **Enterprise Universal Hub & FinOps Gateway for AI Agents & SaaS Platforms**  
-> Consolidate multi-agent tool access, dynamic SaaS client registration (OAuth 2.1 RFC 7591 / Atlassian Rovo), and enterprise data governance into a single, high-performance TypeScript Model Context Protocol (MCP) gateway.
+> **Enterprise Universal Inbound Adapter & MCP Gateway for AI Agents & SaaS Platforms**  
+> Consolidate multi-agent tool access, dynamic SaaS client registration (OAuth 2.1 RFC 7591 / Atlassian Rovo), and enterprise governance & budgeting into a single, high-performance TypeScript Model Context Protocol (MCP) gateway.
 
 ---
 
@@ -26,20 +26,21 @@
   - [Cursor IDE](#3-cursor-ide)
   - [Claude Code](#4-claude-code)
 - [Enterprise SaaS Integration (Atlassian Rovo)](#enterprise-saas-integration-atlassian-rovo)
-- [BigQuery FinOps Guardrails](#bigquery-finops-guardrails)
+- [Governance, Rate Limiting & User Budgeting](#governance-rate-limiting--user-budgeting)
 - [Production Deployment (Google Cloud Run & Docker)](#production-deployment-google-cloud-run--docker)
 - [Configuration Reference](#configuration-reference)
 - [Troubleshooting](#troubleshooting)
 - [Security & Governance](#security--governance)
+- [Competitive Analysis & Strategic Roadmap](docs/roadmap-and-competitive-analysis.md)
 
 ---
 
 ## Overview & Value Proposition
 
-As engineering organizations adopt AI coding assistants (**Antigravity**, **OpenCode**, **Cursor**, **Claude Code**, **Windsurf**) alongside enterprise AI knowledge agents (**Atlassian Rovo**), two critical architectural problems emerge:
+As engineering organizations adopt AI coding assistants (**Antigravity**, **OpenCode**, **Cursor**, **Claude Code**, **Windsurf**) alongside enterprise AI knowledge agents (**Atlassian Rovo**, **ChatGPT Actions**), two critical architectural problems emerge:
 
 1. **Tool & Token Sprawl in Developer Machines**: Every coding assistant runs its own isolated set of child processes (`npx`, `docker`, `uvx`) and requires individual API tokens hardcoded across multiple editor configs. When a token expires or rotates, every assistant breaks simultaneously.
-2. **Lack of Governance & FinOps in Enterprise SaaS**: Connecting external AI agents directly to production data warehouses (like BigQuery) risks catastrophic query billings, data leakage, and untracked agent mutations.
+2. **Disparate Inbound Protocols & Lack of Governance in Enterprise SaaS**: Enterprise AI platforms communicate using different authentication protocols, transport layers, and registration handshakes (e.g. RFC 7591 DCR, OAuth 2.1 PKCE, REST OpenAPI). Without a centralized gateway, organizations cannot enforce sliding-window rate limiting, user identity tracking, and daily usage budgeting across agent tools.
 
 **`saas-to-mcp-gateway` solves both challenges simultaneously** via a unified, modular architecture.
 
@@ -58,8 +59,9 @@ The gateway operates seamlessly in two complementary modes:
 │ • Zero-auth /sse & /generic/mcp   │ • OAuth 2.1 (RFC 7591 DCR + PKCE)  │
 │ • Consolidates 11 local & remote  │ • Microsoft Entra ID (OIDC SSO)    │
 │   tools for AI coding assistants  │ • Stateless JWE / Firestore DCR    │
-│ • Single secret management (.env) │ • FinOps label & budget controls   │
-│ • Eliminates process duplication  │ • Atlassian Rovo agent gateway     │
+│ • Single secret management (.env) │ • Sliding-window rate limiter      │
+│ • Eliminates process duplication  │ • Daily byte quotas & user budgets │
+│ • Zero external dependencies      │ • Atlassian Rovo & SaaS bridge     │
 └───────────────────────────────────┴────────────────────────────────────┘
 ```
 
@@ -73,8 +75,8 @@ The gateway operates seamlessly in two complementary modes:
    - Exposes `/atlassian/mcp`, `/register`, `/oauth/authorize`, and `/oauth/token`.
    - Supports Dynamic Client Registration (RFC 7591) for Atlassian Rovo.
    - Full OAuth 2.1 Authorization Code Flow with PKCE and Microsoft Entra ID OIDC SSO.
-   - User Identity Propagation (UIP): attaches `user_email` and `mcp_adapter` labels to BigQuery execution jobs for precise FinOps cost attribution.
-   - Sliding-window rate limiting and per-user daily byte query quotas.
+   - User Identity Propagation (UIP): propagates caller context (`user_email`, `adapterName`, client registration) to downstream drivers and logs structured audit records.
+   - Enforces sliding-window rate limiting and per-user daily byte quotas.
 
 ---
 
@@ -98,12 +100,12 @@ graph TD
         IN_OAI[OpenAI Action Adapter<br/>OpenAPI 3.1.0 & REST]
         
         AUTH[Auth Guard & UIP<br/>User Identity Propagation]
-        FINOPS[FinOps Policy Engine<br/>• Read-only AST check<br/>• Dry-run gate<br/>• Budget Manager<br/>• Rate Limiter]
+        GOV[Governance & Policy Engine<br/>• Sliding-Window Rate Limiter<br/>• Daily User Budget Quotas<br/>• Driver Scoping & Audit Logging]
         REGISTRY[Outbound Client Registry<br/>• Dynamic tool namespacing: driver_tool<br/>• Process & SSE Lifecycle Management]
     end
 
     subgraph Ecosystem ["11 Downstream Services (199 Tools)"]
-        BQ[(Google BigQuery<br/>Native Driver + FinOps)]
+        BQ[(Google BigQuery MCP<br/>custom-bigquery-mcp)]
         GH[GitHub MCP<br/>Repos, PRs, Issues]
         NOTION[Notion MCP<br/>Pages, DBs, Markdown]
         DD[Datadog APM<br/>Logs, Traces, Metrics]
@@ -126,8 +128,8 @@ graph TD
     IN_GEN --> AUTH
     IN_ATL --> AUTH
     IN_OAI --> AUTH
-    AUTH --> FINOPS
-    FINOPS --> REGISTRY
+    AUTH --> GOV
+    GOV --> REGISTRY
 
     REGISTRY --> BQ
     REGISTRY --> GH
@@ -150,7 +152,7 @@ Every tool exposed by the gateway hub is cleanly namespaced as `{driver}_{origin
 
 | Driver | Transport / Bridge | Tools | Highlighted Capabilities | Required Env Vars |
 | :--- | :--- | :---: | :--- | :--- |
-| **`bigquery`** | Native TypeScript | **5** | Safe schema inspection, dry-run cost estimation, read-only SQL with FinOps labels & row caps | `GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT` |
+| **`bigquery`** | Outbound stdio (`qybbs/custom-bigquery-mcp`) | **5** | Safe schema inspection, dry-run cost estimation, read-only SQL with FinOps labels & row caps | `GCP_PROJECT_ID`, `GCP_KEY_FILE_PATH`, `ALLOWLIST_TABLES` |
 | **`github`** | `npx @modelcontextprotocol/server-github` | **26** | Issues, pull requests, file search, commits, branch management, code search | `GITHUB_PERSONAL_ACCESS_TOKEN` |
 | **`notion`** | `npx @notionhq/notion-mcp-server` | **24** | Search pages, read databases, retrieve markdown, update content blocks | `NOTION_API_KEY` |
 | **`datadog`** | `mcp-remote` SSE Bridge | **30** | Logs analysis, trace spans, metrics aggregation, incident lookup, APM skills | `DD_API_KEY`, `DD_APP_KEY`, `DD_SITE` |
@@ -296,31 +298,24 @@ https://your-domain.com/openai/openapi.json?tools=bigquery_search_allowed_tables
 OpenAI calls are routed through the gateway's core governance pipeline:
 - Respects **User Identity Propagation (UIP)** (`ToolContext.adapterName = 'openai'`).
 - Enforces sliding-window rate limiting (returns HTTP `429 Too Many Requests` on quota breaches).
-- Enforces BigQuery dry-run cost estimation and daily byte budget caps.
+- Enforces daily user byte budgets across data tools.
 - Generates structured JSON audit logs for Cloud Logging and Datadog.
 
 ---
 
-## BigQuery FinOps Guardrails
+## Governance, Rate Limiting & User Budgeting
 
-The gateway enforces a strict 4-step sequence on all BigQuery operations:
+The gateway acts as an enforcement layer across all inbound client adapters and outbound tool drivers:
 
 ```
-[1. Discovery]   --> bigquery_list_allowed_tables / search_allowed_tables
-        ↓
-[2. Inspection]  --> bigquery_describe_table
-        ↓
-[3. Cost Gate]   --> bigquery_estimate_query_cost (Mandatory Dry-Run)
-        ↓
-[4. Execution]   --> bigquery_execute_readonly_query (Read-only + FinOps Labels)
+[Inbound Client] ──> [1. Rate Limiter] ──> [2. Budget Manager] ──> [3. Driver Scoping] ──> [4. Downstream Driver]
 ```
 
-1. **Table Allowlisting**: Only datasets and tables listed in `ALLOWLIST_TABLES` can be queried.
-2. **Comment Stripping & AST Validation**: Eliminates SQL injection and blocks mutative keywords (`INSERT`, `UPDATE`, `DELETE`, `DROP`, `ALTER`).
-3. **Cost Protection**: Enforces `MAX_BYTES_BILLED` on every query (e.g. max 10 GB per job).
-4. **FinOps Attribution**: Automatically tags Google Cloud BigQuery jobs with sanitized user metadata labels:
-   - `user_email`: Sanitized user email (e.g. `user_example_com`).
-   - `mcp_adapter`: Originating adapter (`atlassian` or `generic`).
+1. **Sliding-Window Rate Limiting**: Throttles burst traffic per user (e.g. max 60 requests/minute by default via `RATE_LIMIT_MAX_REQUESTS`), preventing runaway agent loops and API exhaustion.
+2. **Per-User Daily Byte Quotas**: Enforces daily byte consumption limits (`USER_DAILY_BUDGET_BYTES`). Downstream drivers (such as `custom-bigquery-mcp`) report billed/processed bytes back in tool metadata, and the gateway automatically decrements the user's quota.
+3. **Driver & Tool Scoping**: Inbound clients can be restricted to specific drivers or tools (`allowedDrivers`), ensuring that a client token or integration only accesses designated capabilities.
+4. **User Identity Propagation (UIP)**: The gateway forwards caller identity (`user_email`, `adapterName`, client registration) to downstream drivers, allowing tools like `custom-bigquery-mcp` to tag cloud jobs for attribution.
+5. **Structured Audit Logging**: Every invocation records request timestamp, user email, tool name, execution status (`SUCCESS`, `REJECTED`, `FAILED`), and driver-reported metadata in JSON format.
 
 ---
 
@@ -357,10 +352,13 @@ Key variables in `.env`:
 | `DCR_PERSISTENCE_MODE` | Dynamic Client Registration store (`STATELESS`, `MEMORY`, `FIRESTORE`) | `STATELESS` |
 | `AUTH_PROVIDER` | Inbound auth provider (`MOCK` or `OIDC`) | `MOCK` |
 | `ALLOWED_EMAIL_DOMAINS` | Restrict OAuth login to specific corporate email domains | `*` |
-| `MAX_BYTES_BILLED` | Maximum allowed BigQuery bytes scanned per query (FinOps limit) | `10737418240` (10 GB) |
-| `ROW_LIMIT` | Hard cap on row results returned to LLMs | `1000` |
-| `DAILY_USER_QUERY_QUOTA_MB` | Daily query limit per user | `51200` (50 GB) |
-| `USER_RATE_LIMIT_RPM` | Rate limit per user (requests per minute) | `60` |
+| `USER_DAILY_BUDGET_BYTES` | Daily quota in bytes per user (0 = unlimited / Personal Mode) | `10737418240` (10 GB) |
+| `RATE_LIMIT_MAX_REQUESTS` | Sliding-window request cap per user (0 = unthrottled) | `60` |
+| `RATE_LIMIT_WINDOW_MS` | Sliding-window duration in milliseconds | `60000` (1 min) |
+| `LOCAL_USER_EMAIL` | Fallback user identity for local dev (Cursor, Claude Code) | `developer@localhost` |
+| `GENERIC_ADAPTER_API_KEY` | Optional static API key for `/sse` and `/generic/mcp` | *(Optional)* |
+| `OPENAI_ADAPTER_API_KEY` | Optional static API key for ChatGPT Actions (`/openai/*`) | *(Optional)* |
+| `GATEWAY_PUBLIC_URL` | Public HTTPS URL for OpenAPI schema generation | *(Required for OpenAI)* |
 
 ---
 
@@ -370,8 +368,9 @@ Key variables in `.env`:
 | :--- | :--- | :--- |
 | `session not found` on client connect | MCP client connected without initializing SSE session | Use `/sse` endpoint and ensure client adheres to MCP SSE specification. |
 | `401 Unauthorized` | Invalid, missing, or expired Bearer Token | Re-authenticate or check `MASTER_SECRET_KEY` consistency across restarts. |
-| `Rejected: Query contains forbidden keyword` | Query contains non-`SELECT` statements or comments | Ensure query is strictly read-only and free of SQL comment blocks. |
-| `maximumBytesBilled limit exceeded` | Query exceeds configured byte scanning cap | Optimize SQL filters using partitioned/clustered columns or adjust `MAX_BYTES_BILLED`. |
+| `Rate limit exceeded: Too many requests for [...]` | User exceeded sliding-window request limit | Wait for window reset or adjust `RATE_LIMIT_MAX_REQUESTS`. |
+| `Daily query budget exceeded` | User exceeded configured `USER_DAILY_BUDGET_BYTES` | Wait until 00:00 UTC or increase daily budget quota. |
+| `Access Denied: You do not have permission to use tools from driver [...]` | Inbound token or client scope restricted | Add driver to `allowedDrivers` list in client registration or token. |
 | `Driver [...] is disabled or failed to start` | Missing API credentials or executable | Check corresponding `_API_KEY` or `_TOKEN` in `.env` and verify required CLI tools (`npx`, `uvx`) are installed. |
 
 ---
@@ -379,8 +378,8 @@ Key variables in `.env`:
 ## Security & Governance
 
 - **Credential Hygiene**: The gateway strictly loads secrets from `.env` or cloud secret managers. Never commit `.env` or Service Account JSON files.
-- **Audit Logging**: Every tool execution is recorded with timestamp, user email, tool name, arguments summary, and BigQuery job ID/bytes scanned.
-- **Principle of Least Privilege**: The GCP Service Account requires only `roles/bigquery.dataViewer` and `roles/bigquery.jobUser`.
+- **Audit Logging**: Every tool execution is recorded with timestamp, user email, tool name, execution status, and driver metadata (e.g. billed bytes, job IDs).
+- **Principle of Least Privilege**: Downstream tool credentials (GCP Service Accounts, GitHub tokens, Datadog keys) should be provisioned with strictly read-only or minimal required scopes.
 
 ---
 
