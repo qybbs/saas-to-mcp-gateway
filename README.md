@@ -3,7 +3,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![MCP Protocol](https://img.shields.io/badge/MCP%20Protocol-2024--11--05-blueviolet)](https://modelcontextprotocol.io/)
-[![Tools Count](https://img.shields.io/badge/Consolidated%20Tools-199%20Tools-brightgreen)](#consolidated-ecosystem-11-services-199-tools)
+[![Tools Count](https://img.shields.io/badge/Consolidated%20Tools-12%20Services-brightgreen)](#consolidated-ecosystem-12-services)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](file:///Users/OUT2305/Repo/bigquery-mcp/docker-compose.yaml)
 [![Google Cloud Run](https://img.shields.io/badge/GCP-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)](file:///Users/OUT2305/Repo/bigquery-mcp/docs/docker.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](file:///Users/OUT2305/Repo/bigquery-mcp/LICENSE)
@@ -18,7 +18,7 @@
 - [Overview & Value Proposition](#overview--value-proposition)
 - [Dual-Mode Architecture](#dual-mode-architecture)
 - [System Architecture Diagram](#system-architecture-diagram)
-- [Consolidated Ecosystem (11 Services, 199 Tools)](#consolidated-ecosystem-11-services-199-tools)
+- [Consolidated Ecosystem (12 Services)](#consolidated-ecosystem-12-services)
 - [Quick Start: Local Hub in 2 Minutes](#quick-start-local-hub-in-2-minutes)
 - [Client Configuration Guides (Copy-Paste)](#client-configuration-guides-copy-paste)
   - [OpenCode CLI](#1-opencode-cli)
@@ -57,7 +57,7 @@ The gateway operates seamlessly in two complementary modes:
 │   Personal Mode (Local Dev Hub)   │   Enterprise Mode (Cloud Run)      │
 ├───────────────────────────────────┼────────────────────────────────────┤
 │ • Zero-auth /sse & /generic/mcp   │ • OAuth 2.1 (RFC 7591 DCR + PKCE)  │
-│ • Consolidates 11 local & remote  │ • Microsoft Entra ID (OIDC SSO)    │
+│ • Consolidates 12 local & remote  │ • Microsoft Entra ID (OIDC SSO)    │
 │   tools for AI coding assistants  │ • Stateless JWE / Firestore DCR    │
 │ • Single secret management (.env) │ • Sliding-window rate limiter      │
 │ • Eliminates process duplication  │ • Daily byte quotas & user budgets │
@@ -67,7 +67,7 @@ The gateway operates seamlessly in two complementary modes:
 
 1. **Personal Mode (Local Development Hub)**:
    - Exposes zero-friction endpoints (`GET /sse`, `POST /messages`, and `POST /generic/mcp`) for local coding agents.
-   - Consolidates **199 tools across 11 services** into one persistent background daemon.
+   - Consolidates **12 downstream enterprise services** into one persistent background daemon.
    - All credentials (`GITHUB_PERSONAL_ACCESS_TOKEN`, `SONARQUBE_TOKEN`, `DD_API_KEY`, etc.) live securely in one `.env` file.
    - Read the complete [Multi-Agent MCP Consolidation Guide](file:///Users/OUT2305/Repo/bigquery-mcp/docs/consolidation-guide.md).
 
@@ -146,7 +146,7 @@ graph TD
 
 ---
 
-## Consolidated Ecosystem (11 Services, 199 Tools)
+## Consolidated Ecosystem (12 Services)
 
 Every tool exposed by the gateway hub is cleanly namespaced as `{driver}_{originalToolName}`, eliminating collisions and enabling clear driver routing:
 
@@ -163,7 +163,7 @@ Every tool exposed by the gateway hub is cleanly namespaced as `{driver}_{origin
 | **`linkedin`** | `uvx mcp-server-linkedin` | **20** | Profile lookup, company posts, job search, network messaging | `LINKEDIN_COOKIE` |
 | **`clickhouse-docs`** | `mcp-remote` SSE Bridge | **2** | Semantic search across ClickHouse documentation and SQL dialect guides | *(Public / None)* |
 | **`atlassian`**| `mcp-remote` SSE Bridge | **32** | Confluence pages, Jira issue management, worklogs, transitions, JQL search | `ATLASSIAN_API_TOKEN`, `ATLASSIAN_EMAIL` |
-| **Total** | | **199** | | |
+| **`amplitude`**| `mcp-remote` Streamable HTTP Bridge | **25+** | Behavioral product analytics, user cohorts, funnels, retention, event taxonomy | *(OAuth 2.0 via `mcp-remote`)* |
 
 ---
 

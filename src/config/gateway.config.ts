@@ -5,7 +5,7 @@ import { DcrPersistenceMode } from '../core/auth/types';
 import { McpDriverType } from '../core/mcp/driver';
 import { GatewayConfig } from './types';
 
-dotenv.config();
+dotenv.config({ override: true });
 
 export let gatewayConfig: GatewayConfig | null = null;
 

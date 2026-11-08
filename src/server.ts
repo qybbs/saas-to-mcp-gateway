@@ -9,7 +9,7 @@ import { validateEnv, gatewayConfig } from './config/gateway.config';
 import { driverManager } from './core/mcp/driverManager';
 
 // Load environment variables
-dotenv.config();
+dotenv.config({ override: true });
 
 const app = express();
 app.disable('x-powered-by'); // Prevent Express version disclosure

@@ -1,11 +1,11 @@
 ---
 name: saas-to-mcp-gateway
-description: Universal, FinOps-aware gateway connecting AI agents (Antigravity, OpenCode, Cursor, Claude Code, Atlassian Rovo) to 11+ downstream enterprise tools (BigQuery, SonarQube, GitHub, Notion, Datadog, Context7, ClickHouse, etc.) over Model Context Protocol (MCP).
+description: Universal, FinOps-aware gateway connecting AI agents (Antigravity, OpenCode, Cursor, Claude Code, Atlassian Rovo) to 12+ downstream enterprise tools (BigQuery, SonarQube, GitHub, Notion, Datadog, Context7, ClickHouse, Amplitude, etc.) over Model Context Protocol (MCP).
 ---
 
 # Enterprise SaaS-to-MCP Gateway Skill
 
-This skill guides AI coding agents on how to interact with the **Enterprise SaaS-to-MCP Gateway**, discover available tools, respect FinOps cost guardrails for data analytics, and leverage integrated downstream tools across 11 distinct domains.
+This skill guides AI coding agents on how to interact with the **Enterprise SaaS-to-MCP Gateway**, discover available tools, respect FinOps cost guardrails for data analytics, and leverage integrated downstream tools across 12 distinct domains.
 
 ---
 
@@ -14,7 +14,7 @@ This skill guides AI coding agents on how to interact with the **Enterprise SaaS
 All tools exposed by the gateway are namespaced with their driver name:
 `{driverName}_{originalToolName}`
 
-The gateway consolidates **199 tools** across **11 active drivers**:
+The gateway consolidates **12 active drivers**:
 
 | Driver Prefix | Domain | Highlighted Tools | Best Practice for Agents |
 | :--- | :--- | :--- | :--- |
@@ -29,6 +29,7 @@ The gateway consolidates **199 tools** across **11 active drivers**:
 | **`atlassian_*`** | Jira & Confluence | `getJiraIssue`, `searchJiraIssuesUsingJql`, `getConfluencePage` | Track Jira tickets and read Confluence requirements. |
 | **`linkedin_*`** | Professional Network | `get_person_profile`, `search_posts`, `send_message` | Professional recruitment and company post discovery. |
 | **`clickhouse-docs_*`**| Database Documentation | `search-clickhouse-docs`, `ask-question-about-clickhouse` | Query official ClickHouse documentation and SQL syntax guides. |
+| **`amplitude_*`** | Product Analytics & Cohorts | `get_amplitude_context`, `query_amplitude_data`, `get_amp_user_data` | Call `get_amplitude_context` first to establish project context. |
 
 ---
 
@@ -79,6 +80,11 @@ Datadog ships dynamic skill guides. Before running deep analysis:
 ### Context7 Library Resolution
 1. Call `context7_resolve-library-id(libraryName="...", query="...")` to obtain the verified library ID (e.g., `/pmndrs/zustand`).
 2. Then call `context7_query-docs(libraryId="/pmndrs/zustand", query="...")` to fetch current code snippets.
+
+### Amplitude Product Analytics
+Amplitude exposes behavioral product analytics, cohorts, and event tracking plans:
+1. Call `amplitude_get_amplitude_context()` to verify organization and project access context.
+2. Call `amplitude_list_tool_categories()` or directly execute analytical queries with `amplitude_query_amplitude_data(query="...")` or inspect user activity via `amplitude_get_amp_user_data(user_id="...")`.
 
 ---
 

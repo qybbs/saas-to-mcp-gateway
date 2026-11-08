@@ -30,6 +30,12 @@
     "internal-tool": {
       "type": "sse",
       "url": "http://localhost:4000/sse"
+    },
+    "amplitude": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "mcp-remote", "https://mcp.amplitude.com/mcp"],
+      "timeout": "60s"
     }
   },
   "inboundAdapters": {
@@ -39,12 +45,12 @@
     },
     "generic": {
       "enabled": true,
-      "allowedDrivers": ["bigquery", "sonarqube", "internal-tool"],
+      "allowedDrivers": ["bigquery", "sonarqube", "internal-tool", "amplitude"],
       "apiKey": "${GENERIC_ADAPTER_API_KEY}"
     },
     "openai": {
       "enabled": true,
-      "allowedDrivers": ["bigquery", "sonarqube", "internal-tool"],
+      "allowedDrivers": ["bigquery", "sonarqube", "internal-tool", "amplitude"],
       "apiKey": "${OPENAI_ADAPTER_API_KEY}"
     }
   }

@@ -157,7 +157,7 @@ Use dynamic `${VAR_NAME}` substitution so secrets are never committed to git:
     "atlassian": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.atlassian.com/v1/sse"]
+      "args": ["-y", "mcp-remote", "https://mcp.atlassian.com/v2/mcp?tools=all"]
     },
     "context7": {
       "type": "stdio",
@@ -176,6 +176,16 @@ Use dynamic `${VAR_NAME}` substitution so secrets are never committed to git:
         "--header",
         "DD_APPLICATION_KEY: ${DD_APPLICATION_KEY}"
       ]
+    },
+    "amplitude": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "https://mcp.amplitude.com/mcp"
+      ],
+      "timeout": "60s"
     }
   },
   "inboundAdapters": {
@@ -192,7 +202,8 @@ Use dynamic `${VAR_NAME}` substitution so secrets are never committed to git:
         "linkedin",
         "atlassian",
         "context7",
-        "datadog"
+        "datadog",
+        "amplitude"
       ]
     }
   }
