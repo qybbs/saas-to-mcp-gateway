@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { validateEnv } from '../src/config/gateway.config';
+import { validateEnv, ensureSelfHealingDefaults } from '../src/config/gateway.config';
 import { McpDriverType } from '../src/core/mcp/driver';
 import { DcrPersistenceMode } from '../src/core/auth/types';
 
@@ -137,6 +137,29 @@ describe('validateEnv', () => {
     it('should throw if limit is zero for positive integer', () => {
       process.env.TOKEN_EXPIRATION_SECONDS = '0';
       expect(() => validateEnv()).toThrow(/TOKEN_EXPIRATION_SECONDS must be a positive integer/);
+    });
+  });
+
+  describe('ensureSelfHealingDefaults', () => {
+    it('should populate missing essential variables and allow validateEnv to pass cleanly', () => {
+      delete process.env.MASTER_SECRET_KEY;
+      delete process.env.DCR_PERSISTENCE_MODE;
+      delete process.env.AUTH_PROVIDER;
+      delete process.env.MOCK_USER_EMAIL;
+      delete process.env.MOCK_USER_PASSWORD;
+
+      ensureSelfHealingDefaults();
+
+      expect(process.env.MASTER_SECRET_KEY).toBeDefined();
+      const decodedKey = Buffer.from(process.env.MASTER_SECRET_KEY!, 'base64');
+      expect(decodedKey.length).toBe(32);
+      expect(process.env.DCR_PERSISTENCE_MODE).toBe(DcrPersistenceMode.STATELESS);
+      expect(process.env.AUTH_PROVIDER).toBe('MOCK');
+      expect(process.env.MOCK_USER_EMAIL).toBe('developer@localhost');
+      expect(process.env.MOCK_USER_PASSWORD).toBe('admin');
+
+      // validateEnv should pass cleanly without throwing
+      expect(() => validateEnv()).not.toThrow();
     });
   });
 });

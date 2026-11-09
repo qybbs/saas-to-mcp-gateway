@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import path from 'path';
 import { DcrPersistenceMode } from '../core/auth/types';
@@ -8,6 +9,37 @@ import { GatewayConfig } from './types';
 dotenv.config({ override: true });
 
 export let gatewayConfig: GatewayConfig | null = null;
+export let rawGatewayConfig: GatewayConfig | null = null;
+
+/**
+ * Self-healing defaults for zero-config Docker / local boot
+ */
+export const ensureSelfHealingDefaults = (): void => {
+  if (!process.env.MASTER_SECRET_KEY) {
+    const autoKey = crypto.randomBytes(32).toString('base64');
+    process.env.MASTER_SECRET_KEY = autoKey;
+    console.warn('[Config] MASTER_SECRET_KEY not set. Auto-generated secure 256-bit key for this session.');
+  }
+
+  if (!process.env.DCR_PERSISTENCE_MODE) {
+    process.env.DCR_PERSISTENCE_MODE = DcrPersistenceMode.STATELESS;
+    console.log('[Config] DCR_PERSISTENCE_MODE not set. Defaulting to STATELESS.');
+  }
+
+  if (!process.env.AUTH_PROVIDER) {
+    process.env.AUTH_PROVIDER = 'MOCK';
+    console.log('[Config] AUTH_PROVIDER not set. Defaulting to "MOCK".');
+  }
+
+  if (process.env.AUTH_PROVIDER === 'MOCK') {
+    if (!process.env.MOCK_USER_EMAIL) {
+      process.env.MOCK_USER_EMAIL = 'developer@localhost';
+    }
+    if (!process.env.MOCK_USER_PASSWORD) {
+      process.env.MOCK_USER_PASSWORD = 'admin';
+    }
+  }
+};
 
 const validateMasterSecretKey = (errors: string[]) => {
   const key = process.env.MASTER_SECRET_KEY;
@@ -112,39 +144,182 @@ const validateDcrPersistenceMode = (errors: string[]) => {
   }
 };
 
-const loadGatewayConfig = (errors: string[]) => {
+export const resolveConfigPath = (): string => {
   let configPath = process.env.GATEWAY_CONFIG_PATH || path.join(process.cwd(), 'gateway-mcp-config.json');
-  
   if (!fs.existsSync(configPath) && process.env.NODE_ENV === 'test') {
-    configPath = path.join(process.cwd(), 'gateway-mcp-config.example.json');
+    const examplePath = path.join(process.cwd(), 'gateway-mcp-config.example.json');
+    if (fs.existsSync(examplePath)) {
+      configPath = examplePath;
+    }
   }
+  return configPath;
+};
 
+const substituteEnvVariables = (rawString: string): string => {
+  return rawString.replace(/\$\{([^}]+)\}/g, (match, varName) => {
+    return process.env[varName] !== undefined ? process.env[varName]! : '';
+  });
+};
+
+const createDefaultStarterConfig = (): GatewayConfig => {
+  return {
+    outboundDrivers: {
+      'clickhouse-docs': {
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', 'mcp-remote', 'https://clickhouse.com/docs/mcp'],
+        timeout: '20s',
+      },
+      context7: {
+        type: 'stdio',
+        command: 'npx',
+        args: ['-y', 'mcp-remote', 'https://mcp.context7.com/mcp'],
+        timeout: '20s',
+      },
+    },
+    inboundAdapters: {
+      generic: {
+        enabled: true,
+        allowedDrivers: ['clickhouse-docs', 'context7'],
+      },
+      atlassian: {
+        enabled: true,
+        allowedDrivers: [],
+      },
+      openai: {
+        enabled: true,
+        allowedDrivers: ['clickhouse-docs', 'context7'],
+      },
+    },
+  };
+};
+
+const loadGatewayConfig = (errors: string[]) => {
+  const configPath = resolveConfigPath();
+
+  // Self-healing: If config file does not exist, create starter configuration
   if (!fs.existsSync(configPath)) {
-    errors.push(`Gateway configuration file not found at ${configPath}. Please create one (see gateway-mcp-config.example.json).`);
-    return;
+    const examplePath = path.join(process.cwd(), 'gateway-mcp-config.example.json');
+    if (fs.existsSync(examplePath)) {
+      try {
+        fs.copyFileSync(examplePath, configPath);
+        console.log(`[Config] Auto-created starter config from ${examplePath} at ${configPath}`);
+      } catch {
+        fs.writeFileSync(configPath, JSON.stringify(createDefaultStarterConfig(), null, 2), 'utf-8');
+        console.log(`[Config] Auto-created default starter config at ${configPath}`);
+      }
+    } else {
+      fs.writeFileSync(configPath, JSON.stringify(createDefaultStarterConfig(), null, 2), 'utf-8');
+      console.log(`[Config] Auto-created default starter config at ${configPath}`);
+    }
   }
 
   try {
-    let configContent = fs.readFileSync(configPath, 'utf-8');
-    
-    // Environment variable substitution ${VAR_NAME}
-    configContent = configContent.replace(/\$\{([^}]+)\}/g, (match, varName) => {
-      return process.env[varName] || '';
-    });
-
-    const parsed = JSON.parse(configContent);
+    const rawContent = fs.readFileSync(configPath, 'utf-8');
+    const parsedRaw = JSON.parse(rawContent) as GatewayConfig;
     
     // Basic structural validation
-    if (!parsed.outboundDrivers || typeof parsed.outboundDrivers !== 'object') {
+    if (!parsedRaw.outboundDrivers || typeof parsedRaw.outboundDrivers !== 'object') {
       errors.push('Config must have an "outboundDrivers" object.');
     }
-    if (!parsed.inboundAdapters || typeof parsed.inboundAdapters !== 'object') {
+    if (!parsedRaw.inboundAdapters || typeof parsedRaw.inboundAdapters !== 'object') {
       errors.push('Config must have an "inboundAdapters" object.');
     }
 
-    gatewayConfig = parsed as GatewayConfig;
+    rawGatewayConfig = parsedRaw;
+
+    // Apply environment variable substitution ${VAR_NAME} for runtime gatewayConfig
+    const substitutedContent = substituteEnvVariables(rawContent);
+    gatewayConfig = JSON.parse(substitutedContent) as GatewayConfig;
   } catch (err: any) {
     errors.push(`Failed to parse ${configPath}: ${err.message}`);
+  }
+};
+
+/**
+ * Returns a cloned copy of the raw gateway configuration with ${VAR_NAME} placeholders preserved.
+ */
+export const getRawGatewayConfig = (): GatewayConfig => {
+  if (!rawGatewayConfig) {
+    loadGatewayConfig([]);
+  }
+  return JSON.parse(JSON.stringify(rawGatewayConfig || { outboundDrivers: {}, inboundAdapters: {} }));
+};
+
+/**
+ * Saves raw configuration to disk, preserving ${VAR_NAME} placeholders, and refreshes the runtime gatewayConfig.
+ */
+export const saveRawGatewayConfig = (updatedRawConfig: GatewayConfig): void => {
+  if (!updatedRawConfig.outboundDrivers || typeof updatedRawConfig.outboundDrivers !== 'object') {
+    throw new Error('Config must have an "outboundDrivers" object.');
+  }
+  if (!updatedRawConfig.inboundAdapters || typeof updatedRawConfig.inboundAdapters !== 'object') {
+    throw new Error('Config must have an "inboundAdapters" object.');
+  }
+
+  const configPath = resolveConfigPath();
+  const rawString = JSON.stringify(updatedRawConfig, null, 2);
+  fs.writeFileSync(configPath, rawString, 'utf-8');
+
+  rawGatewayConfig = JSON.parse(JSON.stringify(updatedRawConfig));
+  const substitutedContent = substituteEnvVariables(rawString);
+  gatewayConfig = JSON.parse(substitutedContent) as GatewayConfig;
+};
+
+/**
+ * Safely updates process.env in memory and updates/appends key-value pairs in the .env file on disk.
+ */
+export const upsertEnvVariables = (vars: Record<string, string>): void => {
+  if (!vars || Object.keys(vars).length === 0) return;
+
+  // 1. Update runtime process.env
+  for (const [key, val] of Object.entries(vars)) {
+    process.env[key] = val;
+  }
+
+  // 2. Persist to .env file on disk
+  const envPath = path.join(process.cwd(), '.env');
+  let envLines: string[] = [];
+
+  if (fs.existsSync(envPath)) {
+    try {
+      const currentContent = fs.readFileSync(envPath, 'utf-8');
+      envLines = currentContent.split('\n');
+    } catch {
+      envLines = [];
+    }
+  }
+
+  const remainingKeys = new Set(Object.keys(vars));
+
+  const updatedLines = envLines.map((line) => {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) return line;
+    const match = line.match(/^([A-Za-z_0-9]+)\s*=/);
+    if (match && remainingKeys.has(match[1])) {
+      const key = match[1];
+      remainingKeys.delete(key);
+      return `${key}="${vars[key]}"`;
+    }
+    return line;
+  });
+
+  // Append any newly added keys not already in .env
+  for (const key of remainingKeys) {
+    updatedLines.push(`${key}="${vars[key]}"`);
+  }
+
+  try {
+    fs.writeFileSync(envPath, updatedLines.join('\n'), 'utf-8');
+  } catch (err: any) {
+    console.warn(`[Config] Could not write to .env file (${err.message}). Variables updated in memory only.`);
+  }
+
+  // Re-synchronize gatewayConfig if raw config has references to these variables
+  if (rawGatewayConfig) {
+    const rawString = JSON.stringify(rawGatewayConfig, null, 2);
+    const substitutedContent = substituteEnvVariables(rawString);
+    gatewayConfig = JSON.parse(substitutedContent) as GatewayConfig;
   }
 };
 

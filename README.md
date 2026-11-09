@@ -3,7 +3,8 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7+-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=nodedotjs&logoColor=white)](https://nodejs.org/)
 [![MCP Protocol](https://img.shields.io/badge/MCP%20Protocol-2024--11--05-blueviolet)](https://modelcontextprotocol.io/)
-[![Tools Count](https://img.shields.io/badge/Consolidated%20Tools-12%20Services-brightgreen)](#consolidated-ecosystem-12-services)
+[![Tools Count](https://img.shields.io/badge/Consolidated%20Tools-13%20Services-brightgreen)](#consolidated-ecosystem-13-services)
+[![Web Dashboard](https://img.shields.io/badge/Web%20Dashboard-Built--in-blue?logo=googlechrome&logoColor=white)](#web-management-console--1-click-marketplace)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker&logoColor=white)](file:///Users/OUT2305/Repo/bigquery-mcp/docker-compose.yaml)
 [![Google Cloud Run](https://img.shields.io/badge/GCP-Cloud%20Run-4285F4?logo=googlecloud&logoColor=white)](file:///Users/OUT2305/Repo/bigquery-mcp/docs/docker.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](file:///Users/OUT2305/Repo/bigquery-mcp/LICENSE)
@@ -17,8 +18,9 @@
 
 - [Overview & Value Proposition](#overview--value-proposition)
 - [Dual-Mode Architecture](#dual-mode-architecture)
+- [Web Management Console & 1-Click Marketplace](#web-management-console--1-click-marketplace)
 - [System Architecture Diagram](#system-architecture-diagram)
-- [Consolidated Ecosystem (12 Services)](#consolidated-ecosystem-12-services)
+- [Consolidated Ecosystem (13 Services)](#consolidated-ecosystem-13-services)
 - [Quick Start: Local Hub in 2 Minutes](#quick-start-local-hub-in-2-minutes)
 - [Client Configuration Guides (Copy-Paste)](#client-configuration-guides-copy-paste)
   - [OpenCode CLI](#1-opencode-cli)
@@ -77,6 +79,18 @@ The gateway operates seamlessly in two complementary modes:
    - Full OAuth 2.1 Authorization Code Flow with PKCE and Microsoft Entra ID OIDC SSO.
    - User Identity Propagation (UIP): propagates caller context (`user_email`, `adapterName`, client registration) to downstream drivers and logs structured audit records.
    - Enforces sliding-window rate limiting and per-user daily byte quotas.
+
+---
+
+## Web Management Console & 1-Click Marketplace
+
+The gateway includes a self-contained, dark-mode management console served at `http://localhost:3000/dashboard` (with zero extra build tools or separate processes):
+
+- **Overview & Live Telemetry**: Live cards for driver uptime, active SSE clients, RPM, average tool latency (ms), and real-time streaming audit logs via Server-Sent Events (`/api/admin/events`).
+- **1-Click MCP Marketplace**: Browse 22 curated community & enterprise servers (PostgreSQL, Redis, Sentry, Linear, Slack, Playwright, etc.) with automated secret saving to `.env` and hot-reloading in `DriverManager`.
+- **Interactive Tool Playground**: Run and test any registered tool directly in the browser with auto-generated schema forms, synced JSON editors, and context simulation.
+- **Scoping & FinOps Matrix**: Toggle driver permissions across inbound adapters (`generic`, `atlassian`, `openai`) and adjust sliding-window rate limits and daily query budgets with 1-click quota resets.
+- **Dual-Mode Security**: Instant access in Personal Mode (`ADMIN_API_KEY` unset); token-protected with unlock modal when `ADMIN_API_KEY` is configured in production.
 
 ---
 
@@ -146,13 +160,14 @@ graph TD
 
 ---
 
-## Consolidated Ecosystem (12 Services)
+## Consolidated Ecosystem (13 Services)
 
 Every tool exposed by the gateway hub is cleanly namespaced as `{driver}_{originalToolName}`, eliminating collisions and enabling clear driver routing:
 
 | Driver | Transport / Bridge | Tools | Highlighted Capabilities | Required Env Vars |
 | :--- | :--- | :---: | :--- | :--- |
 | **`bigquery`** | Outbound stdio (`qybbs/custom-bigquery-mcp`) | **5** | Safe schema inspection, dry-run cost estimation, read-only SQL with FinOps labels & row caps | `GCP_PROJECT_ID`, `GCP_KEY_FILE_PATH`, `ALLOWLIST_TABLES` |
+| **`datastudio`**| Outbound stdio (`qybbs/data-studio-mcp`) | **4** | Autonomous BI dimension breakdown and reporting | *(Public / Stdio)* |
 | **`github`** | `npx @modelcontextprotocol/server-github` | **26** | Issues, pull requests, file search, commits, branch management, code search | `GITHUB_PERSONAL_ACCESS_TOKEN` |
 | **`notion`** | `npx @notionhq/notion-mcp-server` | **24** | Search pages, read databases, retrieve markdown, update content blocks | `NOTION_API_KEY` |
 | **`datadog`** | `mcp-remote` SSE Bridge | **30** | Logs analysis, trace spans, metrics aggregation, incident lookup, APM skills | `DD_API_KEY`, `DD_APP_KEY`, `DD_SITE` |

@@ -5,8 +5,10 @@ import atlassianRouter from './adapters/atlassian/routes';
 import genericRouter, { authenticateGeneric, handleDirectMcpRequest } from './adapters/generic/routes';
 import openaiRouter from './adapters/openai/routes';
 import { handleSseConnection, handlePostMessages } from './adapters/generic/sse';
-import { validateEnv, gatewayConfig } from './config/gateway.config';
+import { ensureSelfHealingDefaults, validateEnv, gatewayConfig } from './config/gateway.config';
 import { driverManager } from './core/mcp/driverManager';
+import adminRouter from './dashboard/routes';
+import { renderDashboardHtml } from './dashboard/ui';
 
 // Load environment variables
 dotenv.config({ override: true });
@@ -82,6 +84,13 @@ app.use('/atlassian', atlassianRouter);
 app.use('/generic', genericRouter);
 app.use('/openai', openaiRouter);
 
+// Mount Admin API & Web UI Dashboard
+if (process.env.DASHBOARD_ENABLED !== 'false') {
+  app.use('/api/admin', adminRouter);
+  app.get('/dashboard', renderDashboardHtml);
+  app.get('/admin', (req, res) => res.redirect('/dashboard'));
+}
+
 // Root shortcut endpoints for Cursor / Claude Code / Antigravity
 app.get('/sse', authenticateGeneric, (req, res) => {
   const allowedDrivers = gatewayConfig?.inboundAdapters?.generic?.allowedDrivers;
@@ -108,23 +117,28 @@ app.get('/health', (req, res) => {
 
 // Start Server
 if (process.env.NODE_ENV !== 'test') {
-  (async () => {
-    try {
-      validateEnv();
-      await driverManager.initialize();
-    } catch (error: any) {
-      console.error(`[FATAL] Startup validation/initialization failed: ${error.message}`);
-      process.exit(1);
-    }
+  try {
+    ensureSelfHealingDefaults();
+    validateEnv();
+  } catch (error: any) {
+    console.error(`[FATAL] Startup validation failed: ${error.message}`);
+    process.exit(1);
+  }
 
-    app.listen(port, () => {
-      console.log(`Enterprise SaaS-to-MCP Gateway is running at http://localhost:${port}`);
-      console.log(`DCR Endpoint: http://localhost:${port}/register`);
-      console.log(`OAuth Authorize Endpoint: http://localhost:${port}/oauth/authorize`);
-      console.log(`OAuth Token Endpoint: http://localhost:${port}/oauth/token`);
-      console.log(`MCP Transport Endpoint: http://localhost:${port}/mcp`);
+  app.listen(port, () => {
+    console.log(`Enterprise SaaS-to-MCP Gateway is running at http://localhost:${port}`);
+    console.log(`Web Management UI: http://localhost:${port}/dashboard`);
+    console.log(`DCR Endpoint: http://localhost:${port}/register`);
+    console.log(`OAuth Authorize Endpoint: http://localhost:${port}/oauth/authorize`);
+    console.log(`OAuth Token Endpoint: http://localhost:${port}/oauth/token`);
+    console.log(`MCP Transport Endpoint: http://localhost:${port}/mcp`);
+
+    // Initialize outbound drivers asynchronously in the background after UI & HTTP are live
+    console.log('[DriverManager] Starting background driver initialization...');
+    driverManager.initialize().catch((err: any) => {
+      console.error(`[DriverManager] Background initialization error: ${err.message}`);
     });
-  })();
+  });
 }
 
 export default app;

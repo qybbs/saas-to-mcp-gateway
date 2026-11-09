@@ -27,6 +27,7 @@ const handleInitialize = (id: any, userEmail: string): McpResponse => {
     userEmail,
     toolName: 'initialize',
     status: 'SUCCESS',
+    durationMs: 0,
   });
   return {
     jsonrpc: '2.0',
@@ -61,6 +62,7 @@ const handleToolsCall = async (
   params: any,
   allowedDrivers?: string[]
 ): Promise<McpResponse> => {
+  const startTime = Date.now();
   const toolName = params?.name;
   const args = params?.arguments || {};
   const { userEmail, adapterName } = context;
@@ -82,8 +84,10 @@ const handleToolsCall = async (
     writeAuditLog({
       requestId: id,
       userEmail,
+      adapterName,
       toolName,
       status: 'REJECTED',
+      durationMs: Date.now() - startTime,
       denialReason: reason,
     });
     return {
@@ -99,8 +103,10 @@ const handleToolsCall = async (
     writeAuditLog({
       requestId: id,
       userEmail,
+      adapterName,
       toolName,
       status: 'REJECTED',
+      durationMs: Date.now() - startTime,
       denialReason: budgetCheck.reason,
     });
     return {
@@ -116,8 +122,10 @@ const handleToolsCall = async (
     writeAuditLog({
       requestId: id,
       userEmail,
+      adapterName,
       toolName,
       status: 'FAILED',
+      durationMs: Date.now() - startTime,
       error: `Method not found: Tool "${toolName}" is not registered by any active driver.`,
     });
     return {
@@ -131,8 +139,10 @@ const handleToolsCall = async (
     writeAuditLog({
       requestId: id,
       userEmail,
+      adapterName,
       toolName,
       status: 'REJECTED',
+      durationMs: Date.now() - startTime,
       denialReason: `Access Denied: You do not have permission to use tools from driver ${driverName}. Allowed drivers: ${allowedDrivers.join(', ')}`,
     });
     return {
@@ -165,8 +175,10 @@ const handleToolsCall = async (
     writeAuditLog({
       requestId: id,
       userEmail,
+      adapterName,
       toolName,
       status: 'SUCCESS',
+      durationMs: Date.now() - startTime,
       metadata,
     });
     
@@ -182,8 +194,10 @@ const handleToolsCall = async (
     writeAuditLog({
       requestId: id,
       userEmail,
+      adapterName,
       toolName,
       status: 'FAILED',
+      durationMs: Date.now() - startTime,
       error: err.message,
     });
     

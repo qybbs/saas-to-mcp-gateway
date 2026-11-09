@@ -1,5 +1,6 @@
 export interface OutboundDriverConfig {
   type: 'stdio' | 'sse';
+  enabled?: boolean;
   command?: string;
   args?: string[];
   env?: Record<string, string>;

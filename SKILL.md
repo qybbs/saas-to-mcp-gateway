@@ -14,11 +14,12 @@ This skill guides AI coding agents on how to interact with the **Enterprise SaaS
 All tools exposed by the gateway are namespaced with their driver name:
 `{driverName}_{originalToolName}`
 
-The gateway consolidates **12 active drivers**:
+The gateway consolidates **13 active drivers**:
 
 | Driver Prefix | Domain | Highlighted Tools | Best Practice for Agents |
 | :--- | :--- | :--- | :--- |
 | **`bigquery_*`** | Data Warehouse & FinOps | `search_allowed_tables`, `describe_table`, `estimate_query_cost`, `execute_readonly_query` | **Mandatory 4-Step Sequence**: Always estimate cost before executing queries. |
+| **`datastudio_*`** | Autonomous BI & Reporting | `get_report_schema`, `execute_report_query` | Generate automated analytics dimension breakdowns. |
 | **`sonarqube_*`** | Code Quality & Security | `search_sonar_issues`, `get_quality_gate_status`, `get_sonar_fix_plan` | Check quality gate status before merging or proposing major refactors. |
 | **`github_*`** | Git & Pull Requests | `get_pull_request`, `search_code`, `list_commits`, `create_pull_request_review` | Inspect PR files and diffs directly within your workflow. |
 | **`notion_*`** | Knowledge Base & Docs | `post-search`, `retrieve-a-page`, `retrieve-page-markdown` | Retrieve architectural specs and project documentation. |

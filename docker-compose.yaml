@@ -5,11 +5,16 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: saas-to-mcp-gateway:latest
+    container_name: saas-to-mcp-gateway
     ports:
       - "${PORT:-3000}:3000"
-    env_file:
-      - .env
     volumes:
-      # Mount service account key file locally if specified in .env
-      - ./service-account-key.json:/app/service-account-key.json:ro
+      # Persistent configuration & secrets volume
+      - gateway-data:/app/data
+      # Optional local GCP service account mount if needed
+      - ./google-service-account.json:/app/google-service-account.json:ro
     restart: unless-stopped
+
+volumes:
+  gateway-data:

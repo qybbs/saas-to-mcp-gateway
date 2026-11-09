@@ -6,6 +6,15 @@ export interface BudgetResult {
   reason?: string;
 }
 
+export interface UserUsageRecord {
+  userEmail: string;
+  date: string;
+  usedBytes: number;
+  usedFormatted: string;
+  maxBytes: number;
+  remainingBytes: number;
+}
+
 export const formatBytes = (bytes: number): string => {
   if (bytes === 0) return '0 B';
   const k = 1024;
@@ -33,6 +42,63 @@ export class BudgetManager {
   private getTodayKey(userEmail: string): string {
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD UTC
     return `${userEmail.toLowerCase().trim()}:${today}`;
+  }
+
+  /**
+   * Retrieves currently effective budget configuration
+   */
+  getConfig(): { maxDailyBytes: number; formattedMaxDaily: string } {
+    const max = this.getMaxDailyBytes();
+    return {
+      maxDailyBytes: max,
+      formattedMaxDaily: formatBytes(max),
+    };
+  }
+
+  /**
+   * Dynamically updates runtime budget configuration
+   */
+  setConfig(options: { maxDailyBytes?: number }): void {
+    if (options.maxDailyBytes !== undefined) {
+      this.configuredMaxDailyBytes = options.maxDailyBytes;
+    }
+  }
+
+  /**
+   * Returns usage records for all tracked users today
+   */
+  getAllUsersUsage(): UserUsageRecord[] {
+    const today = new Date().toISOString().slice(0, 10);
+    const maxBytes = this.getMaxDailyBytes();
+    const records: UserUsageRecord[] = [];
+
+    for (const [key, usedBytes] of this.dailyUsage.entries()) {
+      const parts = key.split(':');
+      if (parts.length >= 2) {
+        const userEmail = parts[0];
+        const date = parts[1];
+        if (date === today) {
+          records.push({
+            userEmail,
+            date,
+            usedBytes,
+            usedFormatted: formatBytes(usedBytes),
+            maxBytes,
+            remainingBytes: maxBytes > 0 ? Math.max(0, maxBytes - usedBytes) : Infinity,
+          });
+        }
+      }
+    }
+
+    return records;
+  }
+
+  /**
+   * Resets today's usage for a specific user
+   */
+  resetUser(userEmail: string): void {
+    const key = this.getTodayKey(userEmail);
+    this.dailyUsage.delete(key);
   }
 
   /**

@@ -129,21 +129,26 @@ Extract in-process database drivers into independent MCP repositories to achieve
     *   Gateway is now a 100% vendor-agnostic, lightweight proxy, orchestrator, and governance layer with zero proprietary GCP driver code.
     *   All 16 test suites (154 tests) pass with 100% coverage and zero breaking changes for existing AI clients.
 
-### Phase 8: Web UI Management Dashboard & 1-Click MCP Marketplace [PLANNED]
-Transform the gateway from a CLI/config-driven background daemon into a visual, modern AI Gateway management platform (inspired by 9Router, Portkey, and LiteLLM):
+### Phase 8: Web UI Management Dashboard & 1-Click MCP Marketplace [COMPLETED]
+Transform the gateway from a CLI/config-driven background daemon into a visual, modern AI Gateway management platform:
 
-*   **Visual Observability & Health Dashboard**:
-    *   *Real-time Adapter & Driver Status*: Visual cards showing active health, connection state, and uptime for all Inbound Adapters (`generic`, `openai`, `atlassian`) and Outbound Drivers.
-    *   *Live Metrics & Traffic Analytics*: Real-time request volume (RPM), latency, active users, error rates, and live streaming audit logs.
+*   **Self-Contained Management Console (`GET /dashboard`)**:
+    *   Dark-mode first, zero-build web console served directly by Express on port 3000 without requiring extra frontend build processes or separate ports.
+    *   Dual-Mode Authentication: Instant zero-friction access when `ADMIN_API_KEY` is unset (Personal Mode), with token-protected unlock modal when `ADMIN_API_KEY` is configured (Enterprise Mode).
+*   **Visual Observability & Live Telemetry**:
+    *   *Real-time Adapter & Driver Status*: Visual cards showing active health, connection state (`CONNECTED`, `CONNECTING`, `ERROR`, `STOPPED`), tool counts, and uptime for all Inbound Adapters and Outbound Drivers.
+    *   *Live Metrics & Traffic Analytics*: Real-time request volume (RPM), latency (`avgLatencyMs`), active SSE client count, error rates, and live streaming audit logs via Server-Sent Events (`GET /api/admin/events`) backed by a 500-entry in-memory ring buffer.
 *   **1-Click MCP Marketplace & Dynamic Driver Registry**:
-    *   *Curated MCP Catalog*: Visual marketplace featuring standard community MCP servers (GitHub, Notion, BigQuery, PostgreSQL, ClickHouse, Datadog, Slack, Google Drive, Docker, Puppeteer, etc.).
-    *   *No-Code Driver Installation*: Form-based UI to install and configure drivers (setting commands, arguments, and environment secrets) with automatic update to `gateway-mcp-config.json`.
-    *   *Hot-Reloading*: Dynamic initialization and teardown of outbound drivers without restarting the gateway daemon.
+    *   *Curated MCP Catalog*: Visual marketplace featuring 22 standard enterprise and community MCP servers (BigQuery, Data Studio, PostgreSQL, SQLite, Redis, ClickHouse, ClickHouse Docs, Amplitude, SonarQube, Datadog, ClickStack, Sentry, GitHub, Notion, Atlassian, Context7, Linear, Filesystem, Slack, Brave Search, Playwright, LinkedIn).
+    *   *No-Code Driver Installation*: Form-based UI to install and configure drivers, automatically saving secret tokens to `.env` while preserving `${VAR_NAME}` placeholders in `gateway-mcp-config.json`.
+    *   *Hot-Reloading in `DriverManager`*: Dynamic initialization, teardown (`stopDriver`), and restart of outbound drivers without restarting the gateway daemon.
 *   **Interactive Tool Playground**:
-    *   Built-in browser testing tool (Swagger/Postman-style) that renders interactive input forms directly from downstream tool JSON Schemas, allowing developers to execute tools and inspect responses live.
+    *   Built-in browser testing tool that renders interactive input forms directly from downstream tool JSON Schemas (`inputSchema.properties`) synced with a Raw JSON editor.
+    *   *Context Simulation*: Simulate requests as specific inbound adapters (`generic`, `atlassian`, `openai`, or unrestricted admin) and user emails to test scoping, rate limits, and daily budgets live.
 *   **Visual Scoping & Governance Controls**:
-    *   *Permission Matrix*: Visual toggles to bind allowed drivers to specific inbound adapters (e.g., ChatGPT Action only accesses BigQuery, while Cursor accesses all drivers).
-    *   *Rate Limit & Budget Sliders*: Interactive sliders to adjust sliding-window rate limits and daily query byte budgets per user/adapter.
+    *   *Permission Matrix*: Visual toggle grid to bind allowed drivers to specific inbound adapters with instant persistence to `gateway-mcp-config.json`.
+    *   *Rate Limit & Budget Controls*: Runtime setters and presets (`Unlimited`, `1 GB`, `5 GB`) for `RATE_LIMIT_MAX_REQUESTS`, `RATE_LIMIT_WINDOW_MS`, and `USER_DAILY_BUDGET_BYTES`.
+    *   *Live User Quota Table*: Active consumption tracking per user with 1-click **Reset Quota** buttons.
 
 ### Phase 9: Dynamic Plugin SDK & Cloud-Native Orchestration [FUTURE]
 Long-term vision for ecosystem expansion:
