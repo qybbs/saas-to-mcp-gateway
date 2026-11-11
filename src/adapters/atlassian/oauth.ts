@@ -148,12 +148,13 @@ export const authorizeUser = async (req: express.Request, res: express.Response)
         <style>
           :root {
             color-scheme: dark;
-            --color-bg: #0f172a;
-            --color-surface: #1e293b;
-            --color-input: #090e1a;
-            --color-border: #334155;
-            --color-text: #f8fafc;
-            --color-text-muted: #94a3b8;
+            --color-bg: #0b0d10;
+            --color-surface: #11141a;
+            --color-input: #080a0d;
+            --color-border: #232832;
+            --color-border-strong: #343b48;
+            --color-text: #f3f4f6;
+            --color-text-muted: #9ca3af;
             --color-primary: #2563eb;
             --color-primary-hover: #1d4ed8;
             --color-ring: #93c5fd;
@@ -173,31 +174,30 @@ export const authorizeUser = async (req: express.Request, res: express.Response)
           .card {
             background-color: var(--color-surface);
             border: 1px solid var(--color-border);
-            border-radius: 12px;
-            padding: 32px;
+            border-radius: 8px;
+            padding: 24px;
             width: 100%;
-            max-width: 400px;
-            box-shadow: 0 16px 36px rgba(0,0,0,0.45);
+            max-width: 380px;
           }
           .logo {
             text-align: center;
-            font-weight: 700;
-            font-size: 20px;
+            font-weight: 600;
+            font-size: 13px;
             color: var(--color-ring);
-            margin-bottom: 16px;
-            letter-spacing: -0.02em;
+            margin-bottom: 12px;
+            letter-spacing: 0.01em;
           }
           .title {
             font-size: 18px;
-            font-weight: 700;
-            margin: 0 0 8px;
+            font-weight: 600;
+            margin: 0 0 6px;
             text-align: center;
           }
           .subtitle {
-            font-size: 14px;
+            font-size: 13px;
             color: var(--color-text-muted);
             text-align: center;
-            margin: 0 0 24px;
+            margin: 0 0 20px;
           }
           .form-group {
             margin-bottom: 16px;
@@ -258,8 +258,8 @@ export const authorizeUser = async (req: express.Request, res: express.Response)
       <body>
         <main class="card">
           <div class="logo">SaaS-to-MCP Gateway</div>
-          <h1 class="title">Mock SSO Authorization</h1>
-          <p class="subtitle">Personal project test login</p>
+          <h1 class="title">Authorize Client Access</h1>
+          <p class="subtitle">Sign in to approve MCP gateway permissions</p>
           ${errorMessage}
           <form action="${escapeHtml(req.baseUrl)}${escapeHtml(prefix)}/oauth/login" method="POST">
             

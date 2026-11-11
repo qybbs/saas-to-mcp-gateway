@@ -52,8 +52,71 @@ export const getDashboardClientScript = (): string => `
       while (node.firstChild) node.removeChild(node.firstChild);
     }
 
+    let lastOverviewData = null;
+
     function makeBadge(text, variant) {
       return el('span', { className: 'badge ' + (variant || 'badge-gray'), text });
+    }
+
+    function makeStatusInline(label, tone) {
+      const dot = tone === 'success' ? 'green'
+        : tone === 'warning' ? 'yellow'
+        : tone === 'danger' ? 'red' : 'gray';
+      const toneClass = tone === 'success' ? 'is-success'
+        : tone === 'warning' ? 'is-warning'
+        : tone === 'danger' ? 'is-danger' : 'is-muted';
+      return el('span', { className: 'status-inline ' + toneClass }, [
+        el('span', { className: 'status-dot ' + dot, 'aria-hidden': 'true' }),
+        el('span', { text: label }),
+      ]);
+    }
+
+    const CATALOG_MONOGRAMS = {
+      bigquery: 'BQ',
+      datastudio: 'DS',
+      postgres: 'PG',
+      sqlite: 'SQ',
+      redis: 'RD',
+      clickhouse: 'CH',
+      'clickhouse-docs': 'CD',
+      amplitude: 'AM',
+      sonarqube: 'SN',
+      datadog: 'DD',
+      clickstack: 'CS',
+      sentry: 'SE',
+      github: 'GH',
+      notion: 'NT',
+      atlassian: 'AT',
+      context7: 'C7',
+      linear: 'LN',
+      filesystem: 'FS',
+      slack: 'SL',
+      'brave-search': 'BR',
+      playwright: 'PW',
+      linkedin: 'LI',
+    };
+
+    function getDriverMonogram(id, name) {
+      if (id && CATALOG_MONOGRAMS[id]) return CATALOG_MONOGRAMS[id];
+      const parts = String(name || id || 'MC').replace(/[^A-Za-z0-9 ]/g, '').trim().split(/\\s+/);
+      if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+      return (parts[0] || 'MC').slice(0, 2).toUpperCase();
+    }
+
+    function svgEl(tag, attrs, children) {
+      const node = document.createElementNS('http://www.w3.org/2000/svg', tag);
+      if (attrs) {
+        for (const [k, v] of Object.entries(attrs)) {
+          if (v !== undefined && v !== null) node.setAttribute(k, String(v));
+        }
+      }
+      if (children) {
+        const list = Array.isArray(children) ? children : [children];
+        for (const child of list) {
+          if (child) node.appendChild(child);
+        }
+      }
+      return node;
     }
 
     function formatBytes(bytes) {
@@ -220,23 +283,31 @@ export const getDashboardClientScript = (): string => `
       fetchLogs();
     }
 
-    function setSseStatus(label, variant) {
+    function setSseStatus(label, tone) {
       const badge = document.getElementById('sseStatusBadge');
       if (!badge) return;
-      badge.className = 'badge ' + variant;
-      badge.textContent = label;
+      const dot = tone === 'success' ? 'green'
+        : tone === 'warning' ? 'yellow'
+        : tone === 'danger' ? 'red' : 'gray';
+      const toneClass = tone === 'success' ? 'is-success'
+        : tone === 'warning' ? 'is-warning'
+        : tone === 'danger' ? 'is-danger' : 'is-muted';
+      badge.className = 'status-inline ' + toneClass;
+      clearNode(badge);
+      badge.appendChild(el('span', { className: 'status-dot ' + dot, 'aria-hidden': 'true' }));
+      badge.appendChild(document.createTextNode(label));
     }
 
     function initSse() {
       if (eventSource) eventSource.close();
-      setSseStatus('Connecting...', 'badge-warning');
+      setSseStatus('Connecting', 'warning');
       const sseUrl = adminKey
         ? ('/api/admin/events?adminKey=' + encodeURIComponent(adminKey))
         : '/api/admin/events';
       eventSource = new EventSource(sseUrl);
 
       eventSource.addEventListener('connected', () => {
-        setSseStatus('Live Stream', 'badge-success');
+        setSseStatus('Live Stream', 'success');
       });
 
       eventSource.addEventListener('audit_log', (e) => {
@@ -254,35 +325,45 @@ export const getDashboardClientScript = (): string => `
 
       eventSource.addEventListener('metrics', (e) => {
         try {
-          updateMetricsUI(JSON.parse(e.data));
+          const metrics = JSON.parse(e.data);
+          updateMetricsUI(metrics);
+          if (lastOverviewData) {
+            lastOverviewData = { ...lastOverviewData, metrics };
+            renderTopologyGraph(lastOverviewData);
+          }
         } catch (err) {
           console.error('Failed to parse metrics SSE', err);
         }
       });
 
       eventSource.onerror = () => {
-        setSseStatus('Reconnecting...', 'badge-warning');
+        setSseStatus('Reconnecting', 'warning');
       };
     }
 
     function buildAuditRow(log) {
       const audit = log.audit || {};
-      const statusVariant = audit.status === 'SUCCESS'
-        ? 'badge-success'
+      const statusTone = audit.status === 'SUCCESS'
+        ? 'success'
         : audit.status === 'REJECTED'
-          ? 'badge-warning'
-          : 'badge-danger';
+          ? 'warning'
+          : 'danger';
+      const statusLabel = audit.status === 'SUCCESS'
+        ? 'Success'
+        : audit.status === 'REJECTED'
+          ? 'Rejected'
+          : audit.status === 'FAILED' ? 'Failed' : (audit.status || 'Unknown');
       const time = log.timestamp ? new Date(log.timestamp).toLocaleTimeString() : '-';
       const latency = audit.durationMs !== undefined ? (audit.durationMs + ' ms') : '-';
       const details = audit.denialReason || audit.error ||
         (audit.actualBytesBilled ? (formatBytes(audit.actualBytesBilled) + ' billed') : 'OK');
 
       return el('tr', null, [
-        el('td', { className: 'tabular', text: time, style: 'color: var(--color-text-muted); font-size: 0.8rem;' }),
-        el('td', null, makeBadge(audit.status || 'UNKNOWN', statusVariant)),
+        el('td', { className: 'tabular', text: time, style: 'color: var(--color-text-muted); font-size: var(--text-xs);' }),
+        el('td', null, makeStatusInline(statusLabel, statusTone)),
         el('td', { text: audit.userEmail || '-', style: 'font-weight: 500;' }),
-        el('td', null, makeBadge(audit.adapterName || 'generic', 'badge-gray')),
-        el('td', { className: 'mono', text: audit.toolName || '-', style: 'color: var(--blue-300);' }),
+        el('td', { className: 'mono', text: audit.adapterName || 'generic', style: 'font-size: var(--text-xs); color: var(--color-text-muted);' }),
+        el('td', { className: 'mono', text: audit.toolName || '-', style: 'color: var(--cobalt-300); font-size: var(--text-xs);' }),
         el('td', { className: 'tabular', text: latency }),
         el('td', { className: 'cell-truncate', text: details, title: details }),
       ]);
@@ -324,23 +405,229 @@ export const getDashboardClientScript = (): string => `
       box.hidden = false;
     }
 
+    function renderTopologyGraph(overview) {
+      const container = document.getElementById('topologyGraph');
+      if (!container) return;
+      clearNode(container);
+
+      const data = overview || {};
+      const metrics = data.metrics || {};
+      const callCounts = metrics.driverCallCounts || {};
+      const drivers = Array.isArray(data.drivers) ? data.drivers : [];
+      const adaptersCfg = data.inboundAdapters || {};
+
+      const summary = document.getElementById('topologyHealthSummary');
+      if (summary) {
+        summary.textContent =
+          (metrics.totalRequests || 0) + ' reqs · ' +
+          (metrics.successCount || 0) + ' ok · ' +
+          (metrics.uptimeSeconds || 0) + 's uptime';
+      }
+
+      const driverMap = new Map(drivers.map((d) => [d.name, d]));
+      const visibleDrivers = drivers.slice(0, 10);
+      const hiddenCount = Math.max(0, drivers.length - visibleDrivers.length);
+      const rowSlots = visibleDrivers.length + (hiddenCount > 0 ? 1 : 0);
+
+      const adapters = [
+        { id: 'generic', label: 'generic', proto: 'SSE / HTTP' },
+        { id: 'atlassian', label: 'atlassian', proto: 'OAuth 2.1' },
+        { id: 'openai', label: 'openai', proto: 'OpenAPI REST' },
+      ];
+
+      const svgW = 960;
+      const svgH = Math.max(216, Math.max(adapters.length, rowSlots || 1) * 42 + 32);
+      const midY = Math.round(svgH / 2);
+
+      const svg = svgEl('svg', {
+        class: 'topology-svg',
+        viewBox: '0 0 ' + svgW + ' ' + svgH,
+        role: 'img',
+        'aria-label': 'Gateway routing topology from inbound adapters to outbound drivers',
+      });
+
+      // Column headers
+      svg.appendChild(svgEl('text', { x: 16, y: 18, fill: '#9ca3af', 'font-size': 11, 'font-weight': 600 }, document.createTextNode('INBOUND ADAPTERS')));
+      svg.appendChild(svgEl('text', { x: 390, y: 18, fill: '#9ca3af', 'font-size': 11, 'font-weight': 600 }, document.createTextNode('GATEWAY POLICY CORE')));
+      svg.appendChild(svgEl('text', { x: 716, y: 18, fill: '#9ca3af', 'font-size': 11, 'font-weight': 600 }, document.createTextNode('OUTBOUND DRIVERS')));
+
+      const topOffset = 28;
+      const usableH = svgH - topOffset - 12;
+
+      // Inbound adapter nodes + curves to Core
+      adapters.forEach((a, idx) => {
+        const cy = Math.round(topOffset + ((idx + 0.5) / adapters.length) * usableH);
+        const ay = cy - 22;
+        const allowed = adaptersCfg[a.id] && Array.isArray(adaptersCfg[a.id].allowedDrivers)
+          ? adaptersCfg[a.id].allowedDrivers
+          : [];
+        const hasLive = allowed.some((name) => {
+          const drv = driverMap.get(name);
+          return drv && drv.status === 'CONNECTED';
+        });
+
+        svg.appendChild(svgEl('path', {
+          d: 'M 244 ' + cy + ' C 312 ' + cy + ', 322 ' + midY + ', 386 ' + midY,
+          fill: 'none',
+          stroke: hasLive ? '#60a5fa' : '#343b48',
+          'stroke-width': hasLive ? 1.75 : 1.2,
+          'stroke-dasharray': hasLive ? 'none' : '4 4',
+          opacity: hasLive ? 0.85 : 0.75,
+        }));
+
+        const box = svgEl('g');
+        box.appendChild(svgEl('rect', {
+          x: 16, y: ay, width: 228, height: 44, rx: 6,
+          fill: '#141820', stroke: hasLive ? '#343b48' : '#232832', 'stroke-width': 1,
+        }));
+        box.appendChild(svgEl('circle', {
+          cx: 32, cy: ay + 22, r: 3.5,
+          fill: hasLive ? '#10b981' : '#9ca3af',
+        }));
+        box.appendChild(svgEl('text', {
+          x: 44, y: ay + 19, fill: '#f3f4f6', 'font-size': 12.5, 'font-weight': 600,
+        }, document.createTextNode(a.label)));
+        box.appendChild(svgEl('text', {
+          x: 44, y: ay + 34, fill: '#9ca3af', 'font-size': 11,
+        }, document.createTextNode(a.proto + ' · ' + allowed.length + ' permitted')));
+        box.appendChild(svgEl('circle', { cx: 244, cy: cy, r: 3, fill: hasLive ? '#60a5fa' : '#343b48' }));
+        svg.appendChild(box);
+      });
+
+      // Center Gateway Core node
+      const coreTop = midY - 56;
+      const coreG = svgEl('g');
+      coreG.appendChild(svgEl('rect', {
+        x: 386, y: coreTop, width: 188, height: 112, rx: 8,
+        fill: '#141820', stroke: '#343b48', 'stroke-width': 1.25,
+      }));
+      coreG.appendChild(svgEl('rect', {
+        x: 386, y: coreTop, width: 188, height: 3, rx: 1.5,
+        fill: '#2563eb',
+      }));
+      coreG.appendChild(svgEl('text', {
+        x: 402, y: coreTop + 28, fill: '#f3f4f6', 'font-size': 13, 'font-weight': 600,
+      }, document.createTextNode('Policy & Telemetry')));
+      coreG.appendChild(svgEl('text', {
+        x: 402, y: coreTop + 48, fill: '#d1d5db', 'font-size': 12, 'font-family': 'ui-monospace, monospace',
+      }, document.createTextNode((metrics.rpm || 0) + ' RPM · ' + (metrics.avgLatencyMs || 0) + ' ms')));
+
+      const okCount = metrics.successCount || 0;
+      const rejCount = metrics.rejectedCount || 0;
+      const errCount = metrics.failedCount || 0;
+      const totalOutcome = okCount + rejCount + errCount;
+      const barX = 402;
+      const barY = coreTop + 68;
+      const barW = 156;
+      coreG.appendChild(svgEl('rect', { x: barX, y: barY, width: barW, height: 6, rx: 3, fill: '#232832' }));
+      if (totalOutcome > 0) {
+        let cursor = barX;
+        const okW = Math.round((okCount / totalOutcome) * barW);
+        const rejW = Math.round((rejCount / totalOutcome) * barW);
+        const errW = Math.max(0, barW - okW - rejW);
+        if (okW > 0) {
+          coreG.appendChild(svgEl('rect', { x: cursor, y: barY, width: okW, height: 6, rx: 2, fill: '#10b981' }));
+          cursor += okW;
+        }
+        if (rejW > 0) {
+          coreG.appendChild(svgEl('rect', { x: cursor, y: barY, width: rejW, height: 6, rx: 2, fill: '#f59e0b' }));
+          cursor += rejW;
+        }
+        if (errW > 0) {
+          coreG.appendChild(svgEl('rect', { x: cursor, y: barY, width: errW, height: 6, rx: 2, fill: '#f87171' }));
+        }
+        coreG.appendChild(svgEl('text', {
+          x: 402, y: coreTop + 94, fill: '#9ca3af', 'font-size': 11,
+        }, document.createTextNode(okCount + ' ok · ' + rejCount + ' blocked · ' + errCount + ' err')));
+      } else {
+        coreG.appendChild(svgEl('text', {
+          x: 402, y: coreTop + 94, fill: '#9ca3af', 'font-size': 11,
+        }, document.createTextNode('Idle · awaiting requests')));
+      }
+      coreG.appendChild(svgEl('circle', { cx: 386, cy: midY, r: 3.5, fill: '#60a5fa' }));
+      coreG.appendChild(svgEl('circle', { cx: 574, cy: midY, r: 3.5, fill: '#60a5fa' }));
+      svg.appendChild(coreG);
+
+      // Outbound driver nodes + curves from Core
+      if (visibleDrivers.length === 0) {
+        svg.appendChild(svgEl('path', {
+          d: 'M 574 ' + midY + ' C 638 ' + midY + ', 648 ' + midY + ', 716 ' + midY,
+          fill: 'none', stroke: '#343b48', 'stroke-width': 1.2, 'stroke-dasharray': '4 4',
+        }));
+        svg.appendChild(svgEl('rect', {
+          x: 716, y: midY - 22, width: 228, height: 44, rx: 6,
+          fill: '#11141a', stroke: '#343b48', 'stroke-dasharray': '4 4',
+        }));
+        svg.appendChild(svgEl('text', {
+          x: 830, y: midY + 4, 'text-anchor': 'middle', fill: '#9ca3af', 'font-size': 12,
+        }, document.createTextNode('No drivers configured')));
+      } else {
+        visibleDrivers.forEach((d, idx) => {
+          const cy = Math.round(topOffset + ((idx + 0.5) / rowSlots) * usableH);
+          const dy = cy - 17;
+          const isConnected = d.status === 'CONNECTED';
+          const statusColor = isConnected ? '#10b981'
+            : d.status === 'CONNECTING' ? '#f59e0b'
+            : d.status === 'STOPPED' ? '#9ca3af' : '#f87171';
+          const shortName = d.name.length > 17 ? (d.name.slice(0, 16) + '…') : d.name;
+          const calls = callCounts[d.name] || 0;
+          const metaLabel = d.type + ' · ' + (d.toolCount || 0) + 't' + (calls > 0 ? (' · ' + calls + 'c') : '');
+
+          svg.appendChild(svgEl('path', {
+            d: 'M 574 ' + midY + ' C 642 ' + midY + ', 648 ' + cy + ', 716 ' + cy,
+            fill: 'none',
+            stroke: isConnected ? '#60a5fa' : '#343b48',
+            'stroke-width': isConnected ? 1.75 : 1.15,
+            'stroke-dasharray': isConnected ? 'none' : '4 4',
+            opacity: isConnected ? 0.9 : 0.7,
+          }));
+
+          const dg = svgEl('g');
+          dg.appendChild(svgEl('rect', {
+            x: 716, y: dy, width: 228, height: 34, rx: 5,
+            fill: '#141820', stroke: isConnected ? '#343b48' : '#232832',
+          }));
+          dg.appendChild(svgEl('circle', { cx: 716, cy: cy, r: 3, fill: isConnected ? '#60a5fa' : '#343b48' }));
+          dg.appendChild(svgEl('circle', { cx: 730, cy: cy, r: 3.5, fill: statusColor }));
+          dg.appendChild(svgEl('text', {
+            x: 742, y: cy + 4, fill: '#f3f4f6', 'font-size': 12, 'font-weight': 500,
+          }, document.createTextNode(shortName)));
+          dg.appendChild(svgEl('text', {
+            x: 932, y: cy + 4, 'text-anchor': 'end', fill: '#9ca3af', 'font-size': 11, 'font-family': 'ui-monospace, monospace',
+          }, document.createTextNode(metaLabel)));
+          svg.appendChild(dg);
+        });
+
+        if (hiddenCount > 0) {
+          const cy = Math.round(topOffset + ((visibleDrivers.length + 0.5) / rowSlots) * usableH);
+          svg.appendChild(svgEl('text', {
+            x: 716, y: cy + 4, fill: '#9ca3af', 'font-size': 11,
+          }, document.createTextNode('+ ' + hiddenCount + ' additional drivers in inventory')));
+        }
+      }
+
+      container.appendChild(svg);
+    }
+
     async function fetchOverview() {
       try {
         const data = await apiFetch('/api/admin/overview');
+        lastOverviewData = data;
         showOverviewAlert('');
         document.getElementById('gatewayModeBadge').textContent = data.mode;
         document.getElementById('sseClientsBadge').textContent = data.activeSseTransports + ' SSE Clients';
         document.getElementById('kpiActiveDrivers').textContent = data.activeDriversCount + ' / ' + data.totalDriversCount;
-        document.getElementById('kpiTotalDrivers').textContent = 'Total Configured: ' + data.totalDriversCount;
+        document.getElementById('kpiTotalDrivers').textContent = 'Configured: ' + data.totalDriversCount;
         document.getElementById('kpiTotalTools').textContent = data.totalTools;
         updateMetricsUI(data.metrics);
-        renderDriversGrid(data.drivers || []);
+        renderTopologyGraph(data);
+        renderDriversGrid(data.drivers || [], (data.metrics && data.metrics.driverCallCounts) || {});
       } catch (e) {
         showOverviewAlert(e.message);
       }
     }
 
-    function renderDriversGrid(drivers) {
+    function renderDriversGrid(drivers, callCounts) {
       const grid = document.getElementById('driversGrid');
       clearNode(grid);
 
@@ -350,21 +637,21 @@ export const getDashboardClientScript = (): string => `
           el('button', {
             type: 'button',
             className: 'btn btn-primary',
-            text: 'Browse Marketplace',
+            text: 'Browse Catalog',
             dataset: { action: 'switch-tab', tab: 'marketplace' },
           }),
         ]));
         return;
       }
 
+      const counts = callCounts || {};
       drivers.forEach((d) => {
-        const dotClass = d.status === 'CONNECTED' ? 'green'
-          : d.status === 'STOPPED' ? 'gray'
-          : d.status === 'CONNECTING' ? 'yellow' : 'red';
-        const statusVariant = d.status === 'CONNECTED' ? 'badge-success'
-          : d.status === 'CONNECTING' ? 'badge-warning'
-          : d.status === 'STOPPED' ? 'badge-gray' : 'badge-danger';
-        const statusLabel = d.status === 'CONNECTING' ? 'CONNECTING...' : d.status;
+        const statusTone = d.status === 'CONNECTED' ? 'success'
+          : d.status === 'CONNECTING' ? 'warning'
+          : d.status === 'STOPPED' ? 'muted' : 'danger';
+        const statusLabel = d.status === 'CONNECTED' ? 'Connected'
+          : d.status === 'CONNECTING' ? 'Connecting'
+          : d.status === 'STOPPED' ? 'Stopped' : (d.status || 'Error');
 
         const actions = [];
         if (d.status === 'CONNECTED') {
@@ -386,7 +673,7 @@ export const getDashboardClientScript = (): string => `
           actions.push(el('button', {
             type: 'button',
             className: 'btn btn-primary',
-            text: 'Start / Retry',
+            text: 'Start',
             dataset: { action: 'restart-driver', driver: d.name },
           }));
         }
@@ -399,33 +686,29 @@ export const getDashboardClientScript = (): string => `
           dataset: { action: 'delete-driver', driver: d.name },
         }));
 
-        const detailsChildren = [
-          el('div', null, [
-            el('strong', { text: 'Type: ' }),
-            makeBadge(d.type, 'badge-primary'),
-          ]),
-          el('div', { className: 'tabular' }, [
-            el('strong', { text: 'Tools: ' }),
-            String(d.toolCount || 0) + ' exposed',
-          ]),
+        const calls = counts[d.name] || 0;
+        const metaNodes = [
+          el('span', { className: 'tag mono', text: d.type }),
+          el('span', { text: (d.toolCount || 0) + ' tools' }),
         ];
+        if (calls > 0) metaNodes.push(el('span', { text: '· ' + calls + ' calls' }));
 
+        const bodyNodes = [
+          el('div', { className: 'driver-meta tabular' }, metaNodes),
+        ];
         if (d.commandOrUrl) {
-          detailsChildren.push(el('div', { className: 'driver-command', text: d.commandOrUrl }));
+          bodyNodes.push(el('div', { className: 'driver-command', text: d.commandOrUrl, title: d.commandOrUrl }));
         }
         if (d.lastError) {
-          detailsChildren.push(el('div', { className: 'driver-error', text: 'Error: ' + d.lastError }));
+          bodyNodes.push(el('div', { className: 'driver-error', text: 'Error: ' + d.lastError }));
         }
 
         grid.appendChild(el('article', { className: 'driver-card' }, [
           el('div', { className: 'driver-header' }, [
-            el('div', { className: 'driver-name' }, [
-              el('span', { className: 'status-dot ' + dotClass, 'aria-hidden': 'true' }),
-              el('span', { text: d.name }),
-            ]),
-            makeBadge(statusLabel, statusVariant),
+            el('div', { className: 'driver-name', text: d.name }),
+            makeStatusInline(statusLabel, statusTone),
           ]),
-          el('div', { className: 'driver-details' }, detailsChildren),
+          ...bodyNodes,
           el('div', { className: 'driver-actions' }, actions),
         ]));
       });
@@ -573,24 +856,28 @@ export const getDashboardClientScript = (): string => `
       }
 
       filtered.forEach((item) => {
+        const statusNode = item.installed
+          ? makeStatusInline('Installed', 'success')
+          : el('span', { className: 'status-inline is-muted', text: 'Available' });
+
         grid.appendChild(el('article', { className: 'catalog-item-card' }, [
           el('div', { className: 'catalog-item-head' }, [
             el('div', { className: 'catalog-item-title-wrap' }, [
-              el('span', { className: 'catalog-icon-tile', 'aria-hidden': 'true', text: item.icon || 'MCP' }),
+              el('span', { className: 'catalog-icon-tile', 'aria-hidden': 'true', text: getDriverMonogram(item.id, item.name) }),
               el('div', null, [
                 el('div', { className: 'catalog-item-name', text: item.name }),
                 el('div', { className: 'catalog-item-cat', text: item.category }),
               ]),
             ]),
-            makeBadge(item.installed ? 'INSTALLED' : 'AVAILABLE', item.installed ? 'badge-success' : 'badge-gray'),
+            statusNode,
           ]),
           el('p', { className: 'catalog-item-desc', text: item.description }),
           el('div', { className: 'catalog-item-foot' }, [
-            makeBadge(item.defaultConfig.type, 'badge-primary'),
+            el('span', { className: 'tag mono', text: item.defaultConfig.type }),
             el('button', {
               type: 'button',
               className: item.installed ? 'btn' : 'btn btn-primary',
-              text: item.installed ? 'Configure' : '1-Click Install',
+              text: item.installed ? 'Configure' : 'Install',
               dataset: { action: 'open-install', driver: item.id },
             }),
           ]),
@@ -1037,14 +1324,14 @@ export const getDashboardClientScript = (): string => `
       }
 
       cachedEnvVars.forEach((v) => {
-        const statusBadge = makeBadge(v.isSet ? 'CONFIGURED' : 'NOT SET', v.isSet ? 'badge-success' : 'badge-gray');
+        const statusNode = makeStatusInline(v.isSet ? 'Set' : 'Unset', v.isSet ? 'success' : 'muted');
         const maskedCell = v.maskedValue
-          ? el('td', { className: 'mono', text: v.maskedValue, style: 'font-size: 0.8rem; color: var(--color-text-secondary);' })
-          : el('td', { className: 'mono', text: '(empty)', style: 'font-size: 0.8rem; color: var(--color-text-muted);' });
+          ? el('td', { className: 'mono', text: v.maskedValue, style: 'font-size: var(--text-xs); color: var(--color-text-secondary);' })
+          : el('td', { className: 'mono', text: '—', style: 'font-size: var(--text-xs); color: var(--color-text-muted);' });
 
         tbody.appendChild(el('tr', null, [
-          el('td', null, el('code', { className: 'mono', text: v.key, style: 'color: var(--blue-300); font-size: 0.82rem;' })),
-          el('td', null, statusBadge),
+          el('td', null, el('code', { className: 'mono', text: v.key, style: 'color: var(--cobalt-300); font-size: var(--text-xs);' })),
+          el('td', null, statusNode),
           maskedCell,
           el('td', null, el('input', {
             id: 'env-val-' + v.key,

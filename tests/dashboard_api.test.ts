@@ -80,7 +80,12 @@ describe('Phase 8 Dashboard UI & Admin API Router', () => {
       expect(res.body).toContain('<dialog id="installModal"');
       expect(res.body).toContain('<dialog id="confirmModal"');
       expect(res.body).toContain('id="toastRegion"');
+      expect(res.body).toContain('telemetry-strip');
+      expect(res.body).toContain('id="topologyGraph"');
+      expect(res.body).toContain('--bg-canvas:');
+      expect(res.body).toContain('createElementNS(\'http://www.w3.org/2000/svg\'');
       expect(res.body).toContain('prefers-reduced-motion: reduce');
+      expect(res.body).not.toContain('1-Click');
       expect(res.body).not.toMatch(/\bonclick=/i);
       expect(res.body).not.toContain('window.alert(');
       expect(res.body).not.toContain('window.confirm(');
