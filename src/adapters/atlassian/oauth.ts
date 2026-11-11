@@ -136,7 +136,7 @@ export const authorizeUser = async (req: express.Request, res: express.Response)
     res.setHeader('Set-Cookie', `oauth_flow=${flowToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=900${isSecure ? '; Secure' : ''}`);
 
     const isError = req.query.error === 'login_failed';
-    const errorMessage = isError ? '<div class="error-msg" style="padding:10px;background:rgba(248,81,73,0.1);border:1px solid rgba(248,81,73,0.4);border-radius:6px;margin-bottom:15px;text-align:center;">Authorization Failed: Invalid Credentials</div>' : '';
+    const errorMessage = isError ? '<div class="error-banner" role="alert">Authorization Failed: Invalid Credentials</div>' : '';
 
     const html = `
       <!DOCTYPE html>
@@ -145,116 +145,137 @@ export const authorizeUser = async (req: express.Request, res: express.Response)
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Enterprise SaaS-to-MCP Gateway Authorization</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
         <style>
+          :root {
+            color-scheme: dark;
+            --color-bg: #0f172a;
+            --color-surface: #1e293b;
+            --color-input: #090e1a;
+            --color-border: #334155;
+            --color-text: #f8fafc;
+            --color-text-muted: #94a3b8;
+            --color-primary: #2563eb;
+            --color-primary-hover: #1d4ed8;
+            --color-ring: #93c5fd;
+          }
+          * { box-sizing: border-box; }
           body {
-            font-family: 'Inter', sans-serif;
-            background-color: #0d1117;
-            color: #c9d1d9;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--color-bg);
+            color: var(--color-text);
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
+            padding: 16px;
           }
           .card {
-            background-color: #161b22;
-            border: 1px solid #30363d;
+            background-color: var(--color-surface);
+            border: 1px solid var(--color-border);
             border-radius: 12px;
             padding: 32px;
             width: 100%;
             max-width: 400px;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            box-shadow: 0 16px 36px rgba(0,0,0,0.45);
           }
           .logo {
             text-align: center;
             font-weight: 700;
-            font-size: 24px;
-            color: #58a6ff;
-            margin-bottom: 24px;
+            font-size: 20px;
+            color: var(--color-ring);
+            margin-bottom: 16px;
+            letter-spacing: -0.02em;
           }
           .title {
             font-size: 18px;
-            font-weight: 600;
-            margin-bottom: 8px;
+            font-weight: 700;
+            margin: 0 0 8px;
             text-align: center;
           }
           .subtitle {
             font-size: 14px;
-            color: #8b949e;
+            color: var(--color-text-muted);
             text-align: center;
-            margin-bottom: 24px;
+            margin: 0 0 24px;
           }
           .form-group {
             margin-bottom: 16px;
           }
           label {
             display: block;
-            font-size: 12px;
-            font-weight: 500;
+            font-size: 13px;
+            font-weight: 600;
             margin-bottom: 6px;
-            color: #8b949e;
+            color: #cbd5e1;
           }
           input {
             width: 100%;
-            box-sizing: border-box;
-            background-color: #0d1117;
-            border: 1px solid #30363d;
+            background-color: var(--color-input);
+            border: 1px solid var(--color-border);
             border-radius: 6px;
             padding: 10px 12px;
-            color: #c9d1d9;
+            color: var(--color-text);
             font-size: 14px;
-            transition: border-color 0.2s;
+            transition: border-color 0.15s ease;
+          }
+          input:focus-visible,
+          .btn:focus-visible {
+            outline: 2px solid var(--color-ring);
+            outline-offset: 2px;
           }
           input:focus {
-            outline: none;
-            border-color: #58a6ff;
+            border-color: var(--color-primary);
           }
           .btn {
             width: 100%;
-            background-color: #1f6feb;
-            border: 1px solid rgba(240,246,252,0.1);
+            background-color: var(--color-primary);
+            border: 1px solid var(--color-primary);
             border-radius: 6px;
             color: #ffffff;
             padding: 12px;
             font-size: 14px;
             font-weight: 600;
             cursor: pointer;
-            transition: background-color 0.2s;
+            transition: background-color 0.15s ease;
             margin-top: 12px;
           }
           .btn:hover {
-            background-color: #388bfd;
+            background-color: var(--color-primary-hover);
           }
-          .error-msg {
-            color: #f85149;
-            font-size: 12px;
-            margin-top: 8px;
+          .error-banner {
+            padding: 10px 12px;
+            background: rgba(239, 68, 68, 0.16);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            border-radius: 6px;
+            color: #fca5a5;
+            font-size: 13px;
+            margin-bottom: 16px;
             text-align: center;
           }
         </style>
       </head>
       <body>
-        <div class="card">
-          <div class="logo">Corporate</div>
-          <div class="title">Mock SSO Authorization</div>
-          <div class="subtitle">Personal project test login</div>
+        <main class="card">
+          <div class="logo">SaaS-to-MCP Gateway</div>
+          <h1 class="title">Mock SSO Authorization</h1>
+          <p class="subtitle">Personal project test login</p>
           ${errorMessage}
           <form action="${escapeHtml(req.baseUrl)}${escapeHtml(prefix)}/oauth/login" method="POST">
             
             <div class="form-group">
               <label for="email">Email</label>
-              <input type="email" id="email" name="email" value="${escapeHtml(process.env.MOCK_USER_EMAIL || 'user@example.com')}" required>
+              <input type="email" id="email" name="email" autocomplete="email" value="${escapeHtml(process.env.MOCK_USER_EMAIL || 'user@example.com')}" required>
             </div>
             
             <div class="form-group">
               <label for="password">Password</label>
-              <input type="password" id="password" name="password" required placeholder="••••••••">
+              <input type="password" id="password" name="password" autocomplete="current-password" required placeholder="••••••••">
             </div>
             
-            <button type="submit" class="btn">Authorize & Sign In</button>
+            <button type="submit" class="btn">Authorize &amp; Sign In</button>
           </form>
-        </div>
+        </main>
       </body>
       </html>
     `;

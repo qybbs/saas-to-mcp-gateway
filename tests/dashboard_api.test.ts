@@ -69,6 +69,22 @@ describe('Phase 8 Dashboard UI & Admin API Router', () => {
       expect(res.body).toContain('tab-governance');
       expect(res.body).toContain('tab-env');
     });
+
+    it('should include semantic ARIA landmarks, native dialog modals, and XSS-safe DOM rendering', () => {
+      const { req, res } = createMockReqRes({ method: 'GET', url: '/dashboard' });
+      renderDashboardHtml(req, res);
+
+      expect(res.body).toContain('role="tablist"');
+      expect(res.body).toContain('role="tab"');
+      expect(res.body).toContain('role="tabpanel"');
+      expect(res.body).toContain('<dialog id="installModal"');
+      expect(res.body).toContain('<dialog id="confirmModal"');
+      expect(res.body).toContain('id="toastRegion"');
+      expect(res.body).toContain('prefers-reduced-motion: reduce');
+      expect(res.body).not.toMatch(/\bonclick=/i);
+      expect(res.body).not.toContain('window.alert(');
+      expect(res.body).not.toContain('window.confirm(');
+    });
   });
 
   describe('Admin Auth Guard (Dual-Mode)', () => {
